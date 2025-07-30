@@ -30,9 +30,12 @@ This is particularly useful for AI-assisted development workflows where Claude n
 - ✅ **Graceful Shutdown**: Clean process termination with configurable timeouts
 - ✅ **Title Field**: Mandatory user-friendly titles for process identification
 
-### Phase 2 - Enhanced Features (🚧 NEXT)
+### Phase 2 - Enhanced Features (🚧 IN PROGRESS)
 
 - 🚧 **Web Dashboard**: Real-time process monitoring interface
+  - ✅ WebSocket message types defined with full validation
+  - ✅ ConnectionManager interface with subscription tracking
+  - 🔄 WebSocket server implementation in progress
 - 🚧 **Process Templates**: Predefined workflows and scripts
 - 🚧 **Enhanced Statistics**: Memory usage, CPU metrics
 - 🚧 **Log Persistence**: Optional file-based log storage
@@ -213,16 +216,17 @@ const allProcesses = await listProcesses();
 murmuration/
 ├── src/
 │   ├── shared/
-│   │   └── types.ts          # Core domain types (ProcessStatus, ProcessEntry, LogEntry)
-│   ├── process/
-│   │   ├── types.ts          # Process-specific types and validation  
-│   │   └── registry.ts       # ProcessRegistry data layer
+│   │   ├── types.ts          # Core domain types (ProcessStatus, ProcessEntry, LogEntry)
+│   │   └── logger.ts         # Smart logging system with MCP mode detection
 │   ├── process/
 │   │   ├── types.ts          # Process-specific types and validation  
 │   │   ├── registry.ts       # ProcessRegistry data layer
 │   │   └── manager.ts        # ProcessManager business logic
 │   ├── mcp/
 │   │   └── server.ts         # MCP integration layer
+│   ├── web/
+│   │   ├── types.ts          # WebSocket message types and ConnectionManager interface
+│   │   └── types.test.ts     # ConnectionManager interface tests
 │   └── main.ts               # Server entry point
 ├── deno.json                 # Deno configuration and tasks
 ├── CLAUDE.md                 # Developer guide

@@ -6,6 +6,25 @@ This document provides comprehensive development guidance for the MCP Process Ma
 
 As of the last development session, Phase 1 has been successfully completed with all core features implemented, tested, and working. The MCP server is fully functional with process management capabilities.
 
+## Phase 2 Status: IN PROGRESS 🚧
+
+Currently implementing the WebSocket-based web interface for real-time process monitoring and management.
+
+### Completed Steps:
+1. ✅ **Step 1: Define WebSocket Message Types** (`src/web/types.ts`)
+   - Comprehensive message types for client-server communication
+   - Full TypeScript interfaces for all message types
+   - Type guards for runtime validation of messages
+   - Support for process operations, subscriptions, and heartbeat
+   - 100% test coverage with 9 tests passing
+
+### Next Steps:
+2. 🔄 **Step 2: Create WebSocket Connection Manager Type**
+3. 📋 **Step 3: Create Basic WebSocket Server**
+4. 📋 **Step 4: Implement Connection Manager**
+5. 📋 **Step 5: Add Basic Message Handling**
+... (15 more steps)
+
 ## Project Architecture
 
 The project follows a layered, domain-driven design approach:
@@ -13,14 +32,17 @@ The project follows a layered, domain-driven design approach:
 ```
 src/
 ├── shared/
-│   └── types.ts          # Core domain types (ProcessStatus, ProcessEntry, LogEntry)
+│   ├── types.ts          # Core domain types (ProcessStatus, ProcessEntry, LogEntry)
+│   └── logger.ts         # Smart logging system with MCP mode detection
 ├── process/
 │   ├── types.ts          # Process-specific types and validation
-│   └── registry.ts       # ProcessRegistry data layer
-└── [future modules]
-    ├── manager/          # ProcessManager business logic layer
-    ├── mcp/              # MCP integration layer
-    └── web/              # Optional web interface
+│   ├── registry.ts       # ProcessRegistry data layer
+│   └── manager.ts        # ProcessManager business logic layer
+├── mcp/
+│   └── server.ts         # MCP integration layer
+├── web/
+│   └── types.ts          # WebSocket message types and validation
+└── main.ts               # Server entry point
 ```
 
 ### Design Philosophy
@@ -275,6 +297,83 @@ A smart logging system that:
 - Respects DEBUG environment variable
 - Provides component-based logging
 - Prevents interference with JSON-RPC communication
+
+## Phase 2 Implementation Details
+
+### WebSocket Types (`src/web/types.ts`)
+
+The WebSocket type system provides comprehensive message definitions for bidirectional communication:
+
+#### Client-to-Server Messages:
+- `ListProcessesMessage` - Request process list with optional filtering
+- `StartProcessMessage` - Start a new process with full configuration
+- `StopProcessMessage` - Stop a process with optional termination options
+- `GetLogsMessage` - Retrieve logs with filtering by lines or time
+- `SubscribeMessage` - Subscribe to specific process updates
+- `UnsubscribeMessage` - Unsubscribe from process updates
+- `SubscribeAllMessage` - Subscribe to all process events
+- `UnsubscribeAllMessage` - Unsubscribe from all events
+
+#### Server-to-Client Messages:
+- `ProcessListMessage` - List of processes response
+- `ProcessStartedMessage` - Notification of new process
+- `ProcessUpdatedMessage` - Process state/log updates
+- `ProcessEndedMessage` - Process termination notification
+- `LogUpdateMessage` - Incremental log updates
+- `ErrorMessage` - Error responses with codes
+- `SuccessMessage` - Operation confirmations
+- `ConnectedMessage` - Connection established with session ID
+- `PingMessage`/`PongMessage` - Heartbeat mechanism
+
+#### Key Design Patterns:
+1. **Type Guards**: Every message type has a corresponding type guard for runtime validation
+2. **Reuse of Existing Types**: Leverages `ProcessEntry`, `StartProcessRequest`, etc. from existing modules
+3. **Optional Fields**: Smart use of optional fields for flexibility
+4. **Error Handling**: Structured error messages with codes and details
+5. **Connection Management**: Built-in support for connection state and heartbeat
+
+## Phase 2 Development Progress
+
+### Step 1: WebSocket Message Types (✅ COMPLETE)
+
+Defined comprehensive WebSocket message types in `src/web/types.ts`:
+- **Client Messages**: list_processes, start_process, stop_process, get_logs, subscribe/unsubscribe
+- **Server Messages**: process_list, process_started/updated/ended, log_update, error, success
+- **Type Guards**: Full validation for all message types with inline validation
+- **Connection Types**: WebSocketState enum, WebSocketConfig, ClientSubscriptions
+
+### Step 2: ConnectionManager Interface (✅ COMPLETE)
+
+Designed and implemented the ConnectionManager interface in `src/web/types.ts`:
+
+**Key Design Decisions:**
+1. **Session-Based**: Each connection gets a unique sessionId for tracking
+2. **Subscription Model**: Supports both process-specific and global subscriptions
+3. **Event System**: Built-in event emitter pattern for connection lifecycle events
+4. **Filtering**: Comprehensive ConnectionFilter for targeted operations
+5. **Statistics**: Real-time connection statistics for monitoring
+6. **Activity Tracking**: Last activity timestamps for connection health
+7. **Cleanup**: Built-in inactive connection cleanup mechanism
+
+**Interface Methods:**
+- Connection Management: add/remove/get connections
+- Message Routing: sendToConnection, broadcast, broadcastToProcess
+- Subscription Management: updateSubscription, getSubscriptions, isSubscribedToProcess
+- Maintenance: updateActivity, cleanupInactive, closeAll
+- Monitoring: getStats, onConnectionEvent
+
+**Supporting Types:**
+- `WebSocketConnection`: Complete connection state with metadata
+- `ConnectionEvent`: Typed events for connection lifecycle
+- `SendOptions`: Message sending configuration
+- `ConnectionFilter`: Flexible connection selection criteria
+- `ConnectionStats`: Aggregated connection metrics
+
+This design ensures:
+- Thread-safe operations for concurrent connections
+- Clear separation between connection management and message handling
+- Testable interface with mock implementation provided
+- Extensible event system for future enhancements
 
 ## Phase 2 Development Steps
 
