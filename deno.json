@@ -1,0 +1,21 @@
+{
+  "name": "mcp-process-server",
+  "version": "0.1.0",
+  "tasks": {
+    "dev": "deno run --allow-run --allow-net --allow-read --allow-write --allow-env src/main.ts",
+    "build": "deno compile --allow-run --allow-net --allow-read --allow-write --allow-env --output ./build/mcp-process-server src/main.ts",
+    "web-dev": "deno run --allow-net --allow-read src/web/server.ts"
+  },
+  "imports": {
+    "@std/": "https://deno.land/std@0.208.0/",
+    "@std/uuid": "jsr:@std/uuid",
+    "@std/async": "jsr:@std/async", 
+    "@std/streams": "jsr:@std/streams",
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@latest"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false
+  }
+}
