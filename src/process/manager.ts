@@ -8,10 +8,12 @@ import {
   ProcessTerminationOptions,
   ProcessQuery,
   ProcessStats,
+  ProcessEvents,
   isValidStartProcessRequest,
   isValidStateTransition
 } from './types.ts';
 import { logger } from '../shared/logger.ts';
+import { EventEmitter } from '../shared/event-emitter.ts';
 
 /**
  * ProcessManager - Core process orchestration and lifecycle management
@@ -24,6 +26,7 @@ export class ProcessManager {
   private readonly registry: ProcessRegistry;
   private readonly monitoringConfig: ProcessMonitoringConfig;
   private readonly activeMonitors = new Map<string, AbortController>();
+  private readonly events = new EventEmitter<ProcessEvents>();
 
   /**
    * Initialize ProcessManager with dependency-injected ProcessRegistry
@@ -113,6 +116,20 @@ export class ProcessManager {
           endTime: new Date(),
           logs: [creationLog, failureLog]
         });
+        
+        const failedProcess = this.registry.getProcess(processId);
+        if (failedProcess) {
+          this.events.emit('process:state_changed', {
+            processId,
+            from: ProcessStatus.starting,
+            to: ProcessStatus.failed
+          });
+          this.events.emit('process:failed', {
+            processId,
+            process: failedProcess,
+            error: errorMessage
+          });
+        }
 
         return {
           success: false,
@@ -139,6 +156,15 @@ export class ProcessManager {
         child: childProcess,
         logs: [creationLog, successLog]
       });
+      
+      // Emit state change event
+      if (updatedProcess) {
+        this.events.emit('process:state_changed', {
+          processId,
+          from: ProcessStatus.starting,
+          to: ProcessStatus.running
+        });
+      }
 
       if (!updatedProcess) {
         return {
@@ -160,6 +186,12 @@ export class ProcessManager {
 
       // Start monitoring the spawned process
       this.startMonitoring(processId);
+      
+      // Emit process started event
+      this.events.emit('process:started', {
+        processId,
+        process: finalProcess
+      });
 
       return {
         success: true,
@@ -559,6 +591,8 @@ export class ProcessManager {
       // Validate state transition
       const currentProcess = this.registry.getProcess(processId);
       if (currentProcess && isValidStateTransition(currentProcess.status, finalStatus)) {
+        const previousStatus = currentProcess.status;
+        
         // Update process status with exit information
         const updateData: Partial<ProcessEntry> = {
           status: finalStatus,
@@ -573,6 +607,30 @@ export class ProcessManager {
         this.registry.updateProcess(processId, updateData);
 
         this.addSystemLog(processId, exitMessage);
+        
+        // Emit state change event
+        this.events.emit('process:state_changed', {
+          processId,
+          from: previousStatus,
+          to: finalStatus
+        });
+        
+        // Get updated process for event
+        const updatedProcess = this.registry.getProcess(processId);
+        if (updatedProcess) {
+          if (finalStatus === ProcessStatus.stopped) {
+            this.events.emit('process:stopped', {
+              processId,
+              process: updatedProcess
+            });
+          } else {
+            this.events.emit('process:failed', {
+              processId,
+              process: updatedProcess,
+              error: `Process exited with code ${exitCode}`
+            });
+          }
+        }
       } else {
         this.addSystemLog(processId, `Invalid state transition for process exit: ${currentProcess?.status} -> ${finalStatus}`);
       }
@@ -583,11 +641,35 @@ export class ProcessManager {
     } catch (error) {
       if (!signal.aborted) {
         this.addSystemLog(processId, `Process exit monitoring failed: ${error}`);
+        
+        // Get current process for previous status
+        const currentProcess = this.registry.getProcess(processId);
+        const previousStatus = currentProcess?.status || ProcessStatus.running;
+        
         // Try to update to failed status
         this.registry.updateProcess(processId, {
           status: ProcessStatus.failed,
           endTime: new Date()
         });
+        
+        // Emit events
+        if (currentProcess) {
+          this.events.emit('process:state_changed', {
+            processId,
+            from: previousStatus,
+            to: ProcessStatus.failed
+          });
+          
+          const failedProcess = this.registry.getProcess(processId);
+          if (failedProcess) {
+            this.events.emit('process:failed', {
+              processId,
+              process: failedProcess,
+              error: error instanceof Error ? error.message : 'Process monitoring failed'
+            });
+          }
+        }
+        
         this.cleanupProcess(processId);
       }
     }
@@ -667,6 +749,12 @@ export class ProcessManager {
     } else {
       this.registry.updateProcess(processId, { logs: updatedLogs });
     }
+    
+    // Emit log added event
+    this.events.emit('process:log_added', {
+      processId,
+      log: logEntry
+    });
   }
 
   /**
@@ -963,5 +1051,23 @@ export class ProcessManager {
     // For system-wide logs, we use logger for immediate feedback
     // In a production system, this could be sent to a centralized logging system
     logger.log('ProcessManager', content);
+  }
+  
+  /**
+   * Subscribe to process events
+   * @param event Event name
+   * @param listener Event listener
+   * @returns Unsubscribe function
+   */
+  on<K extends keyof ProcessEvents>(event: K, listener: (data: ProcessEvents[K]) => void): () => void {
+    return this.events.on(event, listener);
+  }
+  
+  /**
+   * Unsubscribe from all events of a specific type
+   * @param event Event name
+   */
+  off<K extends keyof ProcessEvents>(event?: K): void {
+    this.events.removeAllListeners(event);
   }
 }

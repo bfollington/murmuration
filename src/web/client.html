@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Process Manager - WebSocket Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            margin-top: 0;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status.connected { background: #10b981; color: white; }
+        .status.disconnected { background: #ef4444; color: white; }
+        .status.connecting { background: #f59e0b; color: white; }
+        
+        .process-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .process-status.starting { background: #fbbf24; color: #78350f; }
+        .process-status.running { background: #34d399; color: #064e3b; }
+        .process-status.stopping { background: #fb923c; color: #7c2d12; }
+        .process-status.stopped { background: #94a3b8; color: #1e293b; }
+        .process-status.failed { background: #f87171; color: #7f1d1d; }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #3b82f6;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        button:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .process-list {
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .process-item {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .process-item:last-child {
+            border-bottom: none;
+        }
+        .process-info {
+            flex: 1;
+        }
+        .process-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .process-details {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .log-viewer {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            white-space: pre-wrap;
+        }
+        .log-stdout { color: #34d399; }
+        .log-stderr { color: #f87171; }
+        .log-system { color: #60a5fa; }
+        .message {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        .message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Process Manager - WebSocket Test</h1>
+    
+    <div class="container">
+        <h2>Connection Status</h2>
+        <p>WebSocket: <span id="status" class="status disconnected">Disconnected</span></p>
+        <p>Server: <span id="server-url">ws://localhost:8080/ws</span></p>
+        <div class="controls">
+            <button id="connect-btn">Connect</button>
+            <button id="disconnect-btn" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Start New Process</h2>
+        <div class="controls">
+            <input type="text" id="process-title" placeholder="Process Title" style="flex: 1;">
+            <select id="process-script">
+                <option value="echo">Echo</option>
+                <option value="sleep">Sleep</option>
+                <option value="python3">Python</option>
+                <option value="node">Node.js</option>
+                <option value="deno">Deno</option>
+            </select>
+            <input type="text" id="process-args" placeholder="Arguments (space separated)" style="flex: 2;">
+            <button id="start-process-btn" disabled>Start Process</button>
+        </div>
+        <div id="start-message"></div>
+    </div>
+
+    <div class="container">
+        <h2>Active Processes</h2>
+        <div class="controls">
+            <button id="refresh-btn" disabled>Refresh List</button>
+        </div>
+        <div id="process-list" class="process-list">
+            <div class="process-item">
+                <span style="color: #6b7280;">No processes. Connect to server to view processes.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Process Logs</h2>
+        <p>Select a process to view its logs</p>
+        <div id="log-viewer" class="log-viewer">
+            <div class="log-entry log-system">No process selected</div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let selectedProcessId = null;
+        let processes = new Map();
+
+        // UI Elements
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const startProcessBtn = document.getElementById('start-process-btn');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const processListEl = document.getElementById('process-list');
+        const logViewerEl = document.getElementById('log-viewer');
+        const startMessageEl = document.getElementById('start-message');
+
+        // Connect to WebSocket
+        function connect() {
+            const url = 'ws://localhost:8080/ws';
+            updateStatus('connecting');
+            
+            ws = new WebSocket(url);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus('connected');
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                startProcessBtn.disabled = false;
+                refreshBtn.disabled = false;
+                
+                // Request initial process list
+                refreshProcessList();
+            };
+            
+            ws.onclose = (event) => {
+                console.log('WebSocket disconnected', event);
+                updateStatus('disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                startProcessBtn.disabled = true;
+                refreshBtn.disabled = true;
+                ws = null;
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error', error);
+                showMessage(startMessageEl, 'Connection error', 'error');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    handleMessage(message);
+                } catch (error) {
+                    console.error('Failed to parse message', error);
+                }
+            };
+        }
+
+        // Handle incoming messages
+        function handleMessage(message) {
+            console.log('Received message:', message);
+            
+            switch (message.type) {
+                case 'connected':
+                    console.log('Server acknowledged connection:', message.data);
+                    break;
+                    
+                case 'process_list':
+                    updateProcessList(message.data.processes);
+                    break;
+                    
+                case 'process_status':
+                    updateProcess(message.data.process);
+                    break;
+                    
+                case 'process_started':
+                    showMessage(startMessageEl, `Process started: ${message.data.processId}`, 'success');
+                    refreshProcessList();
+                    break;
+                    
+                case 'process_stopped':
+                    updateProcess(message.data.process);
+                    break;
+                    
+                case 'process_failed':
+                    updateProcess(message.data.process);
+                    break;
+                    
+                case 'process_state_changed':
+                    // Refresh to get updated status
+                    if (processes.has(message.data.processId)) {
+                        requestProcessStatus(message.data.processId);
+                    }
+                    break;
+                    
+                case 'process_logs':
+                    if (message.data.processId === selectedProcessId) {
+                        displayLogs(message.data.logs);
+                    }
+                    break;
+                    
+                case 'process_logs_updated':
+                    if (message.data.processId === selectedProcessId) {
+                        appendLogs(message.data.logs);
+                    }
+                    break;
+                    
+                case 'error':
+                    showMessage(startMessageEl, `Error: ${message.data.message}`, 'error');
+                    break;
+            }
+        }
+
+        // Send message to server
+        function sendMessage(type, data = {}) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type, data }));
+            }
+        }
+
+        // UI Functions
+        function updateStatus(state) {
+            statusEl.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+            statusEl.className = `status ${state}`;
+        }
+
+        function showMessage(element, text, type) {
+            element.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                element.innerHTML = '';
+            }, 5000);
+        }
+
+        function refreshProcessList() {
+            sendMessage('list_processes');
+        }
+
+        function requestProcessStatus(processId) {
+            sendMessage('get_process_status', { processId });
+        }
+
+        function updateProcessList(processList) {
+            processes.clear();
+            processList.forEach(p => processes.set(p.id, p));
+            
+            if (processList.length === 0) {
+                processListEl.innerHTML = '<div class="process-item"><span style="color: #6b7280;">No active processes</span></div>';
+                return;
+            }
+            
+            processListEl.innerHTML = processList.map(process => `
+                <div class="process-item" data-process-id="${process.id}">
+                    <div class="process-info">
+                        <div class="process-title">${process.title}</div>
+                        <div class="process-details">
+                            ${process.name} | PID: ${process.pid || 'N/A'} | 
+                            Started: ${new Date(process.startTime).toLocaleTimeString()}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="process-status ${process.status}">${process.status}</span>
+                        <button onclick="viewProcessLogs('${process.id}')" style="margin-left: 8px;">View Logs</button>
+                        ${process.status === 'running' || process.status === 'starting' ? 
+                            `<button onclick="stopProcess('${process.id}')" style="margin-left: 8px;">Stop</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateProcess(process) {
+            processes.set(process.id, process);
+            // Re-render process list
+            updateProcessList(Array.from(processes.values()));
+        }
+
+        function viewProcessLogs(processId) {
+            selectedProcessId = processId;
+            const process = processes.get(processId);
+            if (process) {
+                logViewerEl.innerHTML = `<div class="log-entry log-system">Loading logs for: ${process.title}...</div>`;
+                sendMessage('get_process_logs', { processId, limit: 100 });
+            }
+        }
+
+        function displayLogs(logs) {
+            if (logs.length === 0) {
+                logViewerEl.innerHTML = '<div class="log-entry log-system">No logs available</div>';
+                return;
+            }
+            
+            logViewerEl.innerHTML = logs.map(log => {
+                const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                return `<div class="log-entry log-${log.type}">[${timestamp}] ${log.content}</div>`;
+            }).join('');
+            
+            // Scroll to bottom
+            logViewerEl.scrollTop = logViewerEl.scrollHeight;
+        }
+
+        function appendLogs(logs) {
+            const newLogs = logs.map(log => {
+                const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                return `<div class="log-entry log-${log.type}">[${timestamp}] ${log.content}</div>`;
+            }).join('');
+            
+            logViewerEl.innerHTML += newLogs;
+            
+            // Auto-scroll if near bottom
+            if (logViewerEl.scrollHeight - logViewerEl.scrollTop - logViewerEl.clientHeight < 100) {
+                logViewerEl.scrollTop = logViewerEl.scrollHeight;
+            }
+        }
+
+        function stopProcess(processId) {
+            if (confirm('Stop this process?')) {
+                sendMessage('stop_process', { processId });
+            }
+        }
+
+        // Event Listeners
+        connectBtn.addEventListener('click', connect);
+        
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+
+        startProcessBtn.addEventListener('click', () => {
+            const title = document.getElementById('process-title').value.trim();
+            const script = document.getElementById('process-script').value;
+            const argsInput = document.getElementById('process-args').value.trim();
+            
+            if (!title) {
+                showMessage(startMessageEl, 'Please enter a process title', 'error');
+                return;
+            }
+            
+            const args = argsInput ? argsInput.split(' ') : [];
+            
+            sendMessage('start_process', {
+                title,
+                script_name: script,
+                args
+            });
+            
+            // Clear form
+            document.getElementById('process-title').value = '';
+            document.getElementById('process-args').value = '';
+        });
+
+        refreshBtn.addEventListener('click', refreshProcessList);
+
+        // Make functions available globally for onclick handlers
+        window.viewProcessLogs = viewProcessLogs;
+        window.stopProcess = stopProcess;
+    </script>
+</body>
+</html>

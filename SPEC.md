@@ -205,9 +205,15 @@ For Claude Desktop (`claude_desktop_config.json`):
 ### Phase 3: Advanced Features
 
 - Process queuing and batching
-- Log persistence and rotation
-- Process templates and workflows
 - Enhanced web UI with charts/graphs
+- new tools to track questions, answers and notes during a session
+  - record_question
+  - record_answer
+  - list_questions_and_answers
+  - record_note
+  - list_notes
+  - delete_note
+  - update_note
 
 ## Key Technical Considerations
 

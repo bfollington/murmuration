@@ -621,3 +621,31 @@ export interface ConnectionManager {
 export interface ConnectionManagerFactory {
   (): ConnectionManager;
 }
+
+/**
+ * Generic WebSocket message structure
+ */
+export interface WebSocketMessage {
+  type: string;
+  data?: unknown;
+}
+
+/**
+ * WebSocket error structure
+ */
+export interface WebSocketError {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+/**
+ * Type guard for WebSocket messages
+ */
+export function isWebSocketMessage(value: unknown): value is WebSocketMessage {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const msg = value as Record<string, unknown>;
+  return typeof msg.type === 'string';
+}

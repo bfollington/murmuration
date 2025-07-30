@@ -162,3 +162,14 @@ export function isValidStartProcessRequest(obj: unknown): obj is StartProcessReq
   
   return true;
 }
+
+/**
+ * Process events emitted by ProcessManager
+ */
+export interface ProcessEvents extends Record<string, unknown> {
+  'process:started': { processId: string; process: ProcessEntry };
+  'process:stopped': { processId: string; process: ProcessEntry };
+  'process:failed': { processId: string; process: ProcessEntry; error: string };
+  'process:state_changed': { processId: string; from: ProcessStatus; to: ProcessStatus };
+  'process:log_added': { processId: string; log: LogEntry };
+}
