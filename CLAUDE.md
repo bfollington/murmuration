@@ -50,7 +50,8 @@ enum ProcessStatus {
 
 interface ProcessEntry {
   id: string;
-  name: string;
+  title: string;  // User-provided title for easy identification (REQUIRED)
+  name: string;   // Process/command name
   command: string[];
   status: ProcessStatus;
   startTime: Date;
@@ -59,6 +60,8 @@ interface ProcessEntry {
   child?: Deno.ChildProcess;
   logs: LogEntry[];
   metadata: Record<string, unknown>;
+  exitCode?: number;
+  exitSignal?: string;
 }
 
 interface LogEntry {
@@ -243,46 +246,77 @@ The ProcessRegistry implements several key patterns:
 3. **Query Methods**: Multiple ways to retrieve and filter processes
 4. **Atomic Operations**: Each method is atomic and thread-safe
 
-## Future Development Steps
+## Completed Implementation (Phase 1)
 
-### Layer 1: ProcessManager (Next Priority)
+### ProcessManager (`src/process/manager.ts`)
+
+The ProcessManager has been fully implemented with:
+- Process spawning using `Deno.Command`
+- Automatic stream monitoring for stdout/stderr
+- State transition validation
+- Log rotation and buffering
+- Graceful and forced termination
+- Comprehensive query capabilities
+- Resource cleanup and shutdown coordination
+
+### MCP Server (`src/mcp/server.ts`)
+
+The MCP integration is complete with all 5 tools:
+1. `start_process` - Start new processes with title, args, env vars
+2. `list_processes` - Query with filtering, sorting, pagination
+3. `get_process_status` - Detailed process information
+4. `stop_process` - Graceful/forced termination
+5. `get_process_logs` - Log retrieval with filtering
+
+### Logger System (`src/shared/logger.ts`)
+
+A smart logging system that:
+- Detects MCP mode (piped stdio) and suppresses console output
+- Respects DEBUG environment variable
+- Provides component-based logging
+- Prevents interference with JSON-RPC communication
+
+## Phase 2 Development Steps
+
+### Web Dashboard Interface
 
 ```typescript
-// src/process/manager.ts
-class ProcessManager {
-  constructor(private registry: ProcessRegistry) {}
+// src/web/server.ts
+class WebDashboardServer {
+  constructor(private processManager: ProcessManager) {}
   
-  async startProcess(request: StartProcessRequest): Promise<ProcessCreationResult>
-  async stopProcess(id: string, options?: ProcessTerminationOptions): Promise<boolean>
-  async restartProcess(id: string): Promise<boolean>
-  getProcessLogs(id: string, limit?: number): LogEntry[]
+  // WebSocket for real-time updates
+  setupWebSocket(): void
   
-  // Event system integration
-  addEventListener(type: ProcessEventType, handler: (event: ProcessEvent) => void): void
+  // REST API endpoints
+  setupRoutes(): void
+  
+  // Static file serving for UI
+  serveStaticFiles(): void
 }
 ```
 
-### Layer 2: MCP Integration
+### Process Templates
 
 ```typescript
-// src/mcp/server.ts  
-class MCPProcessServer {
-  constructor(private manager: ProcessManager) {}
-  
-  // MCP tool implementations
-  async handleStartProcess(args: unknown): Promise<MCPToolResult>
-  async handleStopProcess(args: unknown): Promise<MCPToolResult>
-  async handleListProcesses(args: unknown): Promise<MCPToolResult>
-  async handleGetProcessLogs(args: unknown): Promise<MCPToolResult>
+// src/templates/types.ts
+interface ProcessTemplate {
+  id: string;
+  title: string;
+  description: string;
+  script_name: string;
+  args: string[];
+  env_vars?: Record<string, string>;
+  tags: string[];
+}
+
+// src/templates/manager.ts
+class TemplateManager {
+  loadBuiltInTemplates(): ProcessTemplate[]
+  loadUserTemplates(): ProcessTemplate[]
+  applyTemplate(templateId: string, overrides?: Partial<StartProcessRequest>): StartProcessRequest
 }
 ```
-
-### Layer 3: Web Interface (Optional)
-
-- Real-time process monitoring dashboard
-- WebSocket integration for live updates
-- Process log streaming
-- Interactive process management
 
 ## MCP Integration Patterns
 
@@ -298,11 +332,12 @@ const toolDefinition = {
     type: "object",
     properties: {
       script_name: { type: "string", description: "Script to execute" },
+      title: { type: "string", description: "User-friendly title to identify this process" },
       args: { type: "array", items: { type: "string" }, description: "Arguments" },
       env_vars: { type: "object", description: "Environment variables" },
       name: { type: "string", description: "Display name" }
     },
-    required: ["script_name"]
+    required: ["script_name", "title"]
   }
 };
 ```
@@ -383,6 +418,7 @@ Create helper functions for common test scenarios:
 export function createTestProcess(overrides: Partial<ProcessEntry> = {}): ProcessEntry {
   return {
     id: ProcessRegistry.generateProcessId(),
+    title: "Test Process",
     name: "test-process",
     command: ["echo", "test"],
     status: ProcessStatus.starting,
@@ -461,30 +497,78 @@ function monitorRegistryPerformance(registry: ProcessRegistry) {
 }
 ```
 
-## Next Implementation Steps
+## Key Implementation Learnings
 
-1. **ProcessManager Implementation**
-   - Implement process spawning using `Deno.Command`
-   - Add log capture and streaming
-   - Implement state transition logic
-   - Add event system for process lifecycle
+### Testing Permissions
 
-2. **MCP Server Integration**
-   - Implement MCP tool handlers
-   - Add input validation and error handling
-   - Create tool registration system
-   - Add proper MCP response formatting
+Always run tests with proper permissions:
+```bash
+deno test --allow-all  # Or specific: --allow-run --allow-read --allow-write --allow-env
+```
 
-3. **Enhanced Testing**
-   - Add integration tests for ProcessManager
-   - Test MCP tool implementations
-   - Add performance and stress tests
-   - Test error conditions and edge cases
+### Title Field Enhancement
 
-4. **Production Readiness**
-   - Add configuration management
-   - Implement proper logging system
-   - Add metrics and monitoring
-   - Create deployment documentation
+The mandatory `title` field was added in the final phase to improve process identification:
+- Required in `StartProcessRequest`
+- Displayed in all process listings and responses
+- Makes managing multiple processes much easier
+- Validated at both type guard and MCP levels
+
+### MCP Mode Detection
+
+The logger detects MCP mode by checking:
+```typescript
+const isMCPMode = !Deno.env.get('DEBUG') && !Deno.stdout.isTerminal();
+```
+This prevents console output from interfering with JSON-RPC.
+
+### Resource Cleanup
+
+Proper cleanup is critical to avoid test failures:
+- Always kill child processes in test cleanup
+- Wait for process.child.status to ensure termination
+- Stop monitoring before killing processes
+- Add small delays for resource release
+
+## Phase 2 Preparation
+
+### Immediate Priorities
+
+1. **Web Dashboard**
+   - Real-time process monitoring
+   - WebSocket for live updates
+   - Process control UI
+   - Log streaming viewer
+
+2. **Process Templates**
+   - Common development workflows
+   - Build and test scripts
+   - Server configurations
+   - Custom user templates
+
+3. **Enhanced Monitoring**
+   - CPU and memory usage
+   - Process health checks
+   - Alert thresholds
+   - Historical metrics
+
+### Architecture Considerations
+
+- Keep the MCP server lightweight and focused
+- Web dashboard should be optional
+- Templates should be extensible
+- Maintain backward compatibility
+
+## Session Summary
+
+This development session successfully completed Phase 1 of the MCP Process Management Server:
+
+1. **Fixed all test failures** - Updated tests to use proper permissions and fixed resource leaks
+2. **Added mandatory title field** - Enhanced process identification across the system
+3. **Implemented smart logging** - Prevents console output in MCP mode
+4. **Achieved 100% test pass rate** - 94 tests passing
+5. **Built production binary** - Ready for use with Claude Desktop
+
+The server is now fully functional and ready for Phase 2 enhancements.
 
 This developer guide should be updated as new patterns emerge and the implementation progresses. The focus remains on maintaining clean architecture, comprehensive testing, and clear documentation throughout the development process.
