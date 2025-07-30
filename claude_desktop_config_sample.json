@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "murmuration": {
+      "command": "/Users/ben/code/murmuration/build/mcp-process-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}

@@ -11,6 +11,7 @@ import {
   isValidStartProcessRequest,
   isValidStateTransition
 } from './types.ts';
+import { logger } from '../shared/logger.ts';
 
 /**
  * ProcessManager - Core process orchestration and lifecycle management
@@ -63,6 +64,7 @@ export class ProcessManager {
       // Create initial ProcessEntry with 'starting' status
       const processEntry: ProcessEntry = {
         id: processId,
+        title: request.title,
         name: request.name || request.script_name,
         command: processOptions.command,
         status: ProcessStatus.starting,
@@ -872,24 +874,8 @@ export class ProcessManager {
     const process = this.registry.getProcess(processId);
     if (!process) return;
 
-    // Close stdout/stderr pipes if they exist and are still open
-    try {
-      if (process.child?.stdout) {
-        const reader = process.child.stdout.getReader();
-        reader.releaseLock();
-      }
-    } catch {
-      // Ignore cleanup errors - pipes might already be closed
-    }
-
-    try {
-      if (process.child?.stderr) {
-        const reader = process.child.stderr.getReader();
-        reader.releaseLock();
-      }
-    } catch {
-      // Ignore cleanup errors - pipes might already be closed
-    }
+    // Stream cleanup is handled by monitorStream() when abort signal is triggered
+    // No need to manually clean up streams here as it can cause reader conflicts
 
     this.addSystemLog(processId, `Cleaned up resources for process ${processId}`);
   }
@@ -974,8 +960,8 @@ export class ProcessManager {
    * @private
    */
   private addSystemWideLog(content: string): void {
-    // For system-wide logs, we use console for immediate feedback
+    // For system-wide logs, we use logger for immediate feedback
     // In a production system, this could be sent to a centralized logging system
-    console.log(`[ProcessManager] ${content}`);
+    logger.log('ProcessManager', content);
   }
 }

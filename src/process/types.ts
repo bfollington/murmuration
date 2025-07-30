@@ -5,6 +5,7 @@ import { ProcessStatus, ProcessEntry, LogEntry } from '../shared/types.ts';
  */
 export interface StartProcessRequest {
   script_name: string;
+  title: string; // Required user-provided title for identification
   args?: string[];
   env_vars?: Record<string, string>;
   name?: string; // Optional display name
@@ -135,6 +136,11 @@ export function isValidStartProcessRequest(obj: unknown): obj is StartProcessReq
   
   // script_name is required and must be a string
   if (typeof req.script_name !== 'string' || req.script_name.length === 0) {
+    return false;
+  }
+  
+  // title is required and must be a string
+  if (typeof req.title !== 'string' || req.title.length === 0) {
     return false;
   }
   

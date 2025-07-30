@@ -23,7 +23,8 @@ export interface LogEntry {
  */
 export interface ProcessEntry {
   id: string;
-  name: string;
+  title: string;  // User-provided title for easy identification
+  name: string;   // Process/command name
   command: string[];
   status: ProcessStatus;
   startTime: Date;

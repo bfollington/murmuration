@@ -9,6 +9,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessManager } from '../process/manager.ts';
 import { StartProcessRequest, isValidStartProcessRequest } from '../process/types.ts';
+import { logger } from '../shared/logger.ts';
 
 /**
  * MCPProcessServer - Model Context Protocol server for process management
@@ -203,6 +204,10 @@ export class MCPProcessServer {
                   type: 'string',
                   description: 'The script or command to execute',
                 },
+                title: {
+                  type: 'string',
+                  description: 'User-friendly title to identify this process',
+                },
                 args: {
                   type: 'array',
                   items: { type: 'string' },
@@ -220,7 +225,7 @@ export class MCPProcessServer {
                   description: 'Optional display name for the process',
                 },
               },
-              required: ['script_name'],
+              required: ['script_name', 'title'],
             },
           },
           {
@@ -394,6 +399,7 @@ export class MCPProcessServer {
       // Return success response with process details
       const processInfo = {
         processId: result.processId!,
+        title: result.process!.title,
         name: result.process!.name,
         command: result.process!.command.join(' '),
         status: result.process!.status,
@@ -405,7 +411,7 @@ export class MCPProcessServer {
         content: [
           {
             type: 'text',
-            text: `Process '${result.process!.name}' started successfully with ID: ${result.processId}`,
+            text: `Process '${result.process!.title}' started successfully with ID: ${result.processId}`,
           },
           {
             type: 'text',
@@ -445,6 +451,7 @@ export class MCPProcessServer {
       // Format response data
       const processData = processes.map(process => ({
         id: process.id,
+        title: process.title,
         name: process.name,
         command: process.command.join(' '),
         status: process.status,
@@ -505,6 +512,7 @@ export class MCPProcessServer {
       // Format detailed process information
       const processDetails = {
         id: process.id,
+        title: process.title,
         name: process.name,
         command: process.command.join(' '),
         status: process.status,
@@ -550,15 +558,90 @@ export class MCPProcessServer {
    * @private
    */
   private async handleStopProcess(args: unknown): Promise<CallToolResult> {
-    // Tool implementation will be added in next step
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'stop_process tool implementation coming in Step 13',
-        },
-      ],
-    };
+    try {
+      // Validate input arguments
+      const { processId, force, timeout } = this.validateStopProcessArgs(args);
+      
+      this.logServerEvent(`Stopping process: ${processId} (force: ${force}, timeout: ${timeout}ms)`);
+      
+      // Get process before attempting to stop it
+      const process = this.processManager.getProcessStatus(processId);
+      
+      if (!process) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Process with ID '${processId}' not found`
+        );
+      }
+      
+      // Check if process is already stopped
+      if (process.status === 'stopped' || process.status === 'failed') {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Process '${process.name}' (${processId}) is already terminated with status: ${process.status}`,
+            },
+            {
+              type: 'text',
+              text: JSON.stringify({
+                processId: process.id,
+                name: process.name,
+                status: process.status,
+                endTime: process.endTime?.toISOString(),
+                finalState: 'already_terminated'
+              }, null, 2),
+            },
+          ],
+        };
+      }
+      
+      const startTime = Date.now();
+      
+      // Use ProcessManager to stop the process
+      await this.processManager.stopProcess(processId, { force, timeout });
+      
+      const endTime = Date.now();
+      const terminationDuration = endTime - startTime;
+      
+      // Get final process state
+      const finalProcess = this.processManager.getProcessStatus(processId);
+      
+      const terminationInfo = {
+        processId: finalProcess?.id || processId,
+        name: finalProcess?.name || 'unknown',
+        finalStatus: finalProcess?.status || 'unknown',
+        terminationMethod: force ? 'forced' : 'graceful',
+        terminationDuration: `${terminationDuration}ms`,
+        endTime: finalProcess?.endTime?.toISOString(),
+        exitCode: finalProcess?.exitCode
+      };
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Process '${terminationInfo.name}' (${processId}) terminated successfully using ${terminationInfo.terminationMethod} method`,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify(terminationInfo, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`stop_process error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during process termination';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to stop process: ${errorMessage}`
+      );
+    }
   }
 
   /**
@@ -629,7 +712,7 @@ export class MCPProcessServer {
    * @returns Validated StartProcessRequest object
    * @private
    */
-  private validateStartProcessArgs(args: unknown): import('../process/types.ts').StartProcessRequest {
+  private validateStartProcessArgs(args: unknown): StartProcessRequest {
     if (!args || typeof args !== 'object') {
       throw new McpError(ErrorCode.InvalidRequest, 'start_process requires arguments');
     }
@@ -637,10 +720,14 @@ export class MCPProcessServer {
     const params = args as Record<string, unknown>;
     
     // Use the type guard for comprehensive validation
-    if (!import('../process/types.ts').isValidStartProcessRequest(params)) {
+    if (!isValidStartProcessRequest(params)) {
       // Provide more specific error messages for common issues
       if (!params.script_name || typeof params.script_name !== 'string') {
         throw new McpError(ErrorCode.InvalidRequest, 'script_name is required and must be a non-empty string');
+      }
+      
+      if (!params.title || typeof params.title !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'title is required and must be a non-empty string');
       }
       
       if (params.args !== undefined && (!Array.isArray(params.args) || !params.args.every(arg => typeof arg === 'string'))) {
@@ -659,7 +746,62 @@ export class MCPProcessServer {
       throw new McpError(ErrorCode.InvalidRequest, 'Invalid start_process arguments');
     }
     
-    return params as import('../process/types.ts').StartProcessRequest;
+    return params as StartProcessRequest;
+  }
+
+  /**
+   * Validate arguments for stop_process tool
+   * @param args - Raw arguments from MCP call
+   * @returns Validated parameters for process termination
+   * @private
+   */
+  private validateStopProcessArgs(args: unknown): {
+    processId: string;
+    force: boolean;
+    timeout: number;
+  } {
+    if (!args || typeof args !== 'object') {
+      throw new McpError(ErrorCode.InvalidRequest, 'stop_process requires arguments');
+    }
+    
+    const params = args as Record<string, unknown>;
+    
+    // Validate required process_id
+    if (params.process_id === undefined || params.process_id === null) {
+      throw new McpError(ErrorCode.InvalidRequest, 'process_id is required and must be a string');
+    }
+    
+    if (typeof params.process_id !== 'string') {
+      throw new McpError(ErrorCode.InvalidRequest, 'process_id is required and must be a string');
+    }
+    
+    if (params.process_id.length === 0) {
+      throw new McpError(ErrorCode.InvalidRequest, 'process_id cannot be empty');
+    }
+    
+    const result = { 
+      processId: params.process_id,
+      force: false,
+      timeout: 5000
+    };
+    
+    // Validate optional force parameter
+    if (params.force !== undefined) {
+      if (typeof params.force !== 'boolean') {
+        throw new McpError(ErrorCode.InvalidRequest, 'force must be a boolean');
+      }
+      result.force = params.force;
+    }
+    
+    // Validate optional timeout parameter
+    if (params.timeout !== undefined) {
+      if (typeof params.timeout !== 'number' || params.timeout < 1000 || params.timeout > 60000) {
+        throw new McpError(ErrorCode.InvalidRequest, 'timeout must be a number between 1000 and 60000 (milliseconds)');
+      }
+      result.timeout = params.timeout;
+    }
+    
+    return result;
   }
 
   /**
@@ -804,7 +946,7 @@ export class MCPProcessServer {
    * @private
    */
   private logServerEvent(message: string): void {
-    console.log(`[MCPProcessServer] ${message}`);
+    logger.log('MCPProcessServer', message);
   }
 
   /**
@@ -813,6 +955,6 @@ export class MCPProcessServer {
    * @private
    */
   private logServerError(message: string): void {
-    console.error(`[MCPProcessServer] ERROR: ${message}`);
+    logger.error('MCPProcessServer', message);
   }
 }

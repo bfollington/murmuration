@@ -9,13 +9,15 @@ import { StartProcessRequest, ProcessMonitoringConfig, ProcessTerminationOptions
  */
 const createValidStartRequest = (overrides: Partial<StartProcessRequest> = {}): StartProcessRequest => ({
   script_name: 'node',
+  title: 'Test Process',
   args: ['-e', 'console.log("Hello, World!"); setTimeout(() => {}, 2000);'], // Keep process alive longer
   name: 'test-process',
   ...overrides
 });
 
 const createMinimalStartRequest = (): StartProcessRequest => ({
-  script_name: 'echo'
+  script_name: 'echo',
+  title: 'Minimal Test Process'
 });
 
 /**
@@ -147,6 +149,7 @@ Deno.test('ProcessManager - spawnProcess with invalid request (empty script_name
   
   const invalidRequest = {
     script_name: '',
+    title: 'Test',
     args: ['test']
   };
   
@@ -164,6 +167,24 @@ Deno.test('ProcessManager - spawnProcess with invalid request (non-string script
   
   const invalidRequest = {
     script_name: 123,
+    title: 'Test',
+    args: ['test']
+  };
+  
+  const result = await manager.spawnProcess(invalidRequest as any);
+  
+  assertEquals(result.success, false);
+  assertExists(result.error);
+  assert(result.error!.includes('Invalid start process request'));
+  assertEquals(manager.getProcessCount(), 0);
+});
+
+Deno.test('ProcessManager - spawnProcess with invalid request (missing title)', async () => {
+  const registry = new ProcessRegistry();
+  const manager = new ProcessManager(registry);
+  
+  const invalidRequest = {
+    script_name: 'echo',
     args: ['test']
   };
   
@@ -181,6 +202,7 @@ Deno.test('ProcessManager - spawnProcess with invalid args array', async () => {
   
   const invalidRequest = {
     script_name: 'echo',
+    title: 'Test',
     args: ['valid', 123, 'invalid'] // Non-string element
   };
   
@@ -455,6 +477,7 @@ Deno.test('ProcessManager - Process metadata preservation', async () => {
   
   const request = {
     script_name: 'echo',
+    title: 'Metadata Test Process',
     args: ['arg1', 'arg2'],
     env_vars: { TEST_VAR: 'test_value' },
     name: 'metadata-test-process'
@@ -594,6 +617,7 @@ Deno.test('ProcessManager - Log capture from stderr', async () => {
   // Use a command that outputs to stderr
   const request = {
     script_name: 'node',
+    title: 'Stderr Test Process',
     args: ['-e', 'console.error("Error message to stderr")'],
     name: 'stderr-test'
   };
@@ -671,6 +695,7 @@ Deno.test('ProcessManager - Process exit detection with failure code', async () 
   // Use node to exit with a specific code
   const request = {
     script_name: 'node',
+    title: 'Exit Failure Test Process',
     args: ['-e', 'process.exit(1)'],
     name: 'exit-failure-test'
   };
@@ -808,10 +833,26 @@ Deno.test('ProcessManager - Stop all monitoring', async () => {
     for (const processId of processIds) {
       assert(!manager.isMonitoring(processId), `Process ${processId} should not be monitored`);
     }
-  } finally {
-    // Clean up all processes
+    
+    // Terminate all processes to ensure clean shutdown
     for (const processId of processIds) {
-      await cleanupProcess(processId, manager);
+      const process = manager.getProcess(processId);
+      if (process?.child) {
+        try {
+          process.child.kill();
+          await process.child.status;
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    }
+    
+    // Small delay to ensure all resources are released
+    await new Promise(resolve => setTimeout(resolve, 50));
+  } finally {
+    // Final cleanup if needed
+    for (const processId of processIds) {
+      manager.stopMonitoring(processId);
     }
   }
 });
@@ -835,6 +876,7 @@ Deno.test('ProcessManager - Multiple line output handling', async () => {
   
   const request = {
     script_name: 'node',
+    title: 'Multiline Output Test',
     args: ['-e', 'console.log("Line 1"); console.log("Line 2"); console.log("Line 3");'],
     name: 'multiline-test'
   };
@@ -878,6 +920,7 @@ Deno.test('ProcessManager - Long running process monitoring', async () => {
   // Create a long-running process that outputs periodically
   const request = {
     script_name: 'node',
+    title: 'Long Running Test Process',
     args: ['-e', `
       let count = 0;
       const interval = setInterval(() => {
@@ -971,6 +1014,7 @@ Deno.test('ProcessManager - getProcessLogs basic functionality', async () => {
   
   const request = {
     script_name: 'echo',
+    title: 'Log Test Process',
     args: ['Test output'],
     name: 'log-test-process'
   };
@@ -1008,6 +1052,7 @@ Deno.test('ProcessManager - getProcessLogs with line limits', async () => {
   
   const request = {
     script_name: 'node',
+    title: 'Multiline Log Test',
     args: ['-e', 'for(let i=0; i<5; i++) console.log(`Line ${i}`);'],
     name: 'multiline-log-test'
   };
@@ -1051,6 +1096,7 @@ Deno.test('ProcessManager - getProcessLogs with log type filtering', async () =>
   
   const request = {
     script_name: 'node',
+    title: 'Filter Log Test',
     args: ['-e', 'console.log("stdout"); console.error("stderr");'],
     name: 'filter-log-test'
   };
@@ -1144,6 +1190,7 @@ Deno.test('ProcessManager - listProcesses with status filter', async () => {
   // Create a quick process that will complete
   const completedRequest = {
     script_name: 'echo',
+    title: 'Completed Process Test',
     args: ['quick'],
     name: 'completed-process'
   };
@@ -1231,6 +1278,7 @@ Deno.test('ProcessManager - getProcessStats basic functionality', async () => {
   const runningResult = await manager.spawnProcess(createValidStartRequest({ name: 'running-process' }));
   const completedResult = await manager.spawnProcess({
     script_name: 'echo',
+    title: 'Completed Status Test',
     args: ['completed'],
     name: 'completed-process'
   });
@@ -1369,6 +1417,7 @@ Deno.test('ProcessManager - listProcesses with combined filters', async () => {
   const runningResult2 = await manager.spawnProcess(createValidStartRequest({ name: 'prod-running-1' }));
   const completedResult = await manager.spawnProcess({
     script_name: 'echo',
+    title: 'Query Completed Test',
     args: ['done'],
     name: 'test-completed-1'
   });
@@ -1419,6 +1468,7 @@ Deno.test('ProcessManager - getProcessStats with various process states', async 
   // Create quick successful process
   const successResult = await manager.spawnProcess({
     script_name: 'echo',
+    title: 'Quick Success Test',
     args: ['success'],
     name: 'quick-success'
   });
@@ -1426,6 +1476,7 @@ Deno.test('ProcessManager - getProcessStats with various process states', async 
   // Create process that will fail
   const failResult = await manager.spawnProcess({
     script_name: 'node',
+    title: 'Failing Process Test',
     args: ['-e', 'process.exit(1)'],
     name: 'failing-process'
   });
@@ -1473,6 +1524,7 @@ Deno.test('ProcessManager - query methods integration test', async () => {
   for (let i = 0; i < 3; i++) {
     const result = await manager.spawnProcess({
       script_name: 'node',
+      title: `Integration Test Process ${i}`,
       args: ['-e', `console.log('Process ${i} output'); setTimeout(() => {}, 100);`],
       name: `integration-test-${i}`
     });

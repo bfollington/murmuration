@@ -16,7 +16,23 @@ import { ProcessMonitoringConfig } from './process/types.ts';
  * Initialize and start the MCP Process Server
  */
 async function main(): Promise<void> {
-  console.log('[Main] Starting MCP Process Server...');
+  // In MCP mode, we must suppress all console output to avoid interfering with JSON-RPC
+  const isMCPMode = !Deno.env.get('DEBUG') && !Deno.stdout.isTerminal();
+  
+  // Create a logger that respects MCP mode
+  const log = (message: string) => {
+    if (!isMCPMode) {
+      console.log(message);
+    }
+  };
+  
+  const logError = (message: string, error?: unknown) => {
+    if (!isMCPMode) {
+      console.error(message, error);
+    }
+  };
+  
+  log('[Main] Starting MCP Process Server...');
   
   try {
     // Create ProcessRegistry for process storage
@@ -36,22 +52,22 @@ async function main(): Promise<void> {
     const mcpServer = new MCPProcessServer(processManager);
     
     // Start the MCP server
-    console.log('[Main] Starting MCP server with stdio transport...');
+    log('[Main] Starting MCP server with stdio transport...');
     await mcpServer.start();
     
-    console.log('[Main] MCP Process Server is running and ready for client connections');
-    console.log('[Main] Server Info:', JSON.stringify(mcpServer.getServerInfo(), null, 2));
+    log('[Main] MCP Process Server is running and ready for client connections');
+    log('[Main] Server Info: ' + JSON.stringify(mcpServer.getServerInfo(), null, 2));
     
     // Handle graceful shutdown on SIGINT (Ctrl+C)
     const handleShutdown = async (signal: string) => {
-      console.log(`[Main] Received ${signal}, shutting down gracefully...`);
+      log(`[Main] Received ${signal}, shutting down gracefully...`);
       
       try {
         await mcpServer.stop();
-        console.log('[Main] MCP server stopped successfully');
+        log('[Main] MCP server stopped successfully');
         Deno.exit(0);
       } catch (error) {
-        console.error('[Main] Error during shutdown:', error);
+        logError('[Main] Error during shutdown:', error);
         Deno.exit(1);
       }
     };
@@ -61,7 +77,7 @@ async function main(): Promise<void> {
     Deno.addSignalListener('SIGTERM', () => handleShutdown('SIGTERM'));
     
     // Keep the process running
-    console.log('[Main] Press Ctrl+C to stop the server');
+    log('[Main] Press Ctrl+C to stop the server');
     
     // Wait indefinitely - the server handles all client communication via stdio
     while (true) {
@@ -70,12 +86,12 @@ async function main(): Promise<void> {
       // Optionally log server stats periodically
       if (Deno.env.get('DEBUG') === 'true') {
         const info = mcpServer.getServerInfo();
-        console.log('[Main] Server Stats:', info.processManagerStats);
+        log('[Main] Server Stats: ' + JSON.stringify(info.processManagerStats));
       }
     }
     
   } catch (error) {
-    console.error('[Main] Failed to start MCP Process Server:', error);
+    logError('[Main] Failed to start MCP Process Server:', error);
     Deno.exit(1);
   }
 }
