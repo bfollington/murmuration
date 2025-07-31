@@ -1004,3 +1004,214 @@ While the core system is complete, potential future enhancements include:
    - Advanced visualizations
 
 This developer guide documents the complete Phase 3 implementation. The system provides a robust foundation for process management, knowledge capture, and intelligent automation workflows.
+
+## Phase 4: File-Based Knowledge Management
+
+### Overview
+
+The file-based knowledge management system provides persistent issue tracking and knowledge capture that survives between sessions and enables multi-agent collaboration. This system replaces the ephemeral TodoWrite() tool with a durable, file-based approach.
+
+### MCP Tools for Issue Management
+
+#### 1. record_issue
+Creates a new issue for tracking actionable tasks and problems.
+
+**Parameters:**
+- `title` (required): The issue title/summary
+- `content` (required): The detailed issue description
+- `priority`: Priority level - "low", "medium", "high" (default: "medium")
+- `tags`: Array of tags for categorization
+
+**Example:**
+```json
+{
+  "title": "Fix WebSocket memory leak",
+  "content": "WebSocket connections are not being properly cleaned up when clients disconnect abruptly. This causes memory usage to grow over time.",
+  "priority": "high",
+  "tags": ["bug", "websocket", "memory"]
+}
+```
+
+#### 2. list_issues
+List issues with optional filtering by status, tags, or limit.
+
+**Parameters:**
+- `status`: Filter by issue status - "open", "in-progress", "completed", "archived"
+- `tags`: Filter by tags (issues must have all specified tags)
+- `limit`: Maximum number of issues to return (default: 20, max: 100)
+
+**Example:**
+```json
+{
+  "status": "open",
+  "tags": ["bug"],
+  "limit": 10
+}
+```
+
+#### 3. update_issue
+Update an existing issue's title, content, status, tags, or priority.
+
+**Parameters:**
+- `issue_id` (required): The ID of the issue to update
+- `title`: New title for the issue
+- `content`: New content for the issue
+- `status`: New status - "open", "in-progress", "completed", "archived"
+- `priority`: New priority - "low", "medium", "high"
+- `tags`: New tags (replaces existing tags)
+
+**Example:**
+```json
+{
+  "issue_id": "ISSUE_123",
+  "status": "in-progress",
+  "priority": "high"
+}
+```
+
+#### 4. delete_issue
+Delete an issue from the knowledge base.
+
+**Parameters:**
+- `issue_id` (required): The ID of the issue to delete
+
+**Example:**
+```json
+{
+  "issue_id": "ISSUE_123"
+}
+```
+
+### File Structure
+
+Issues are stored as markdown files organized by status:
+
+```
+.knowledge/
+├── open/
+│   ├── ISSUE_1.md
+│   ├── ISSUE_2.md
+│   └── ...
+├── in-progress/
+│   ├── ISSUE_3.md
+│   └── ...
+├── completed/
+│   ├── ISSUE_4.md
+│   └── ...
+└── archived/
+    ├── ISSUE_5.md
+    └── ...
+```
+
+Each issue file contains:
+- YAML frontmatter with metadata (id, title, priority, tags, timestamps)
+- Markdown content body
+- Cross-references to related issues
+
+### Issue File Format
+
+```markdown
+---
+id: ISSUE_123
+title: Fix WebSocket memory leak
+priority: high
+status: open
+tags:
+  - bug
+  - websocket
+  - memory
+timestamp: 2025-07-31T06:00:00.000Z
+lastUpdated: 2025-07-31T06:30:00.000Z
+---
+
+# Fix WebSocket memory leak
+
+WebSocket connections are not being properly cleaned up when clients disconnect abruptly. This causes memory usage to grow over time.
+
+## Investigation
+
+- Checked connection manager cleanup logic
+- Found missing removeEventListener calls
+- Related to [[ISSUE_122]] - general memory optimization
+
+## Solution
+
+Add proper cleanup in the connection close handler...
+```
+
+### Cross-Referencing
+
+Issues can reference each other using the `[[ISSUE_ID]]` syntax:
+- `[[ISSUE_123]]` - Creates a link to another issue
+- Cross-references are bidirectional (both issues know about each other)
+- Useful for tracking related problems, dependencies, or follow-up tasks
+
+### Usage Examples
+
+#### Creating a New Issue
+```typescript
+// Using MCP tool
+await mcp.record_issue({
+  title: "Add authentication to WebSocket server",
+  content: "Currently the WebSocket server accepts all connections. We need to add JWT-based authentication.",
+  priority: "medium",
+  tags: ["enhancement", "security", "websocket"]
+});
+```
+
+#### Tracking Work Progress
+```typescript
+// Move issue to in-progress
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  status: "in-progress"
+});
+
+// Complete the issue
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  status: "completed"
+});
+```
+
+#### Finding Related Issues
+```typescript
+// Find all open security issues
+const securityIssues = await mcp.list_issues({
+  status: "open",
+  tags: ["security"]
+});
+
+// Find high-priority bugs
+const urgentBugs = await mcp.list_issues({
+  status: "open",
+  tags: ["bug", "high-priority"]
+});
+```
+
+### Integration with Agents
+
+This file-based system replaces the TodoWrite() tool for persistent task tracking:
+
+1. **Persistence**: Issues survive between Claude sessions
+2. **Collaboration**: Multiple agents can work on the same issue backlog
+3. **History**: Complete audit trail of changes
+4. **Organization**: Clear status-based file structure
+5. **Searchability**: Easy to grep/search through markdown files
+6. **Portability**: Standard markdown format works with any editor
+
+When using Claude Code or other agents:
+- Use `record_issue` instead of TodoWrite() for persistent tasks
+- Issues created will be available in future sessions
+- The file-based approach enables better collaboration between agents
+- Status transitions (open → in-progress → completed) provide clear workflow
+
+### Best Practices
+
+1. **Use Clear Titles**: Make issue titles descriptive and searchable
+2. **Tag Consistently**: Use standard tags like "bug", "enhancement", "documentation"
+3. **Cross-Reference**: Link related issues using [[ISSUE_ID]] syntax
+4. **Update Status**: Move issues through the workflow as you work on them
+5. **Archive Old Issues**: Use "archived" status for completed work you want to keep for reference
+
+This file-based knowledge system provides a robust foundation for long-term project management and knowledge capture that integrates seamlessly with the MCP server architecture.
