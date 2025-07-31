@@ -42,6 +42,22 @@ export class Logger {
       console.log(`[${component}] DEBUG: ${message}`);
     }
   }
+
+  warn(component: string, message: string, error?: unknown): void {
+    if (!this.isMCPMode) {
+      if (error) {
+        console.warn(`[${component}] WARNING: ${message}`, error);
+      } else {
+        console.warn(`[${component}] WARNING: ${message}`);
+      }
+    }
+  }
+
+  info(component: string, message: string): void {
+    if (!this.isMCPMode) {
+      console.info(`[${component}] INFO: ${message}`);
+    }
+  }
 }
 
 // Export singleton instance

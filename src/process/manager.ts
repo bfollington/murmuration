@@ -14,6 +14,7 @@ import {
 } from './types.ts';
 import { logger } from '../shared/logger.ts';
 import { EventEmitter } from '../shared/event-emitter.ts';
+import { crossDomainEvents } from '../shared/cross-domain-events.ts';
 
 /**
  * ProcessManager - Core process orchestration and lifecycle management
@@ -623,11 +624,33 @@ export class ProcessManager {
               processId,
               process: updatedProcess
             });
+            
+            // Emit cross-domain event for successful completion
+            const duration = updatedProcess.endTime && updatedProcess.startTime ? 
+              updatedProcess.endTime.getTime() - updatedProcess.startTime.getTime() : 0;
+              
+            crossDomainEvents.emit('process:completed', {
+              processId,
+              title: updatedProcess.title,
+              exitCode: updatedProcess.exitCode || 0,
+              duration,
+              metadata: updatedProcess.metadata
+            });
           } else {
             this.events.emit('process:failed', {
               processId,
               process: updatedProcess,
               error: `Process exited with code ${exitCode}`
+            });
+            
+            // Emit cross-domain event for failure
+            crossDomainEvents.emit('process:failed', {
+              processId,
+              title: updatedProcess.title,
+              error: `Process exited with code ${exitCode}`,
+              exitCode: updatedProcess.exitCode,
+              logs: updatedProcess.logs.slice(-10).map(l => l.content),
+              metadata: updatedProcess.metadata
             });
           }
         }

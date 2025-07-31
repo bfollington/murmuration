@@ -9,6 +9,8 @@
 
 import { ProcessRegistry } from '../process/registry.ts';
 import { ProcessManager } from '../process/manager.ts';
+import { KnowledgeManager } from '../knowledge/manager.ts';
+import { IntegratedQueueManager } from '../queue/integrated-manager.ts';
 import { SimpleWebSocketServer } from './server-simple.ts';
 import { logger } from '../shared/logger.ts';
 
@@ -18,10 +20,22 @@ async function main() {
   // Create shared instances
   const registry = new ProcessRegistry();
   const processManager = new ProcessManager(registry);
+  
+  // Create KnowledgeManager for Q&A and notes
+  const knowledgeManager = new KnowledgeManager();
+  
+  // Create IntegratedQueueManager for process queuing
+  const queueManager = new IntegratedQueueManager(processManager, {
+    maxConcurrentProcesses: 5,
+    autoStart: true,
+    persistInterval: 30000,
+    restoreOnStartup: true,
+    persistPath: './queue-state.json'
+  });
 
   // Create and start WebSocket server
   const port = parseInt(Deno.env.get('WS_PORT') || '8080');
-  const server = new SimpleWebSocketServer(processManager, {
+  const server = new SimpleWebSocketServer(processManager, knowledgeManager, queueManager, {
     port,
     hostname: '0.0.0.0',
     path: '/ws',
@@ -38,6 +52,12 @@ async function main() {
       
       // Stop all processes
       await processManager.stopAllProcesses();
+      
+      // Shutdown the queue manager
+      await queueManager.shutdown();
+      
+      // Save knowledge if needed
+      await knowledgeManager.save();
       
       // Stop WebSocket server
       await server.stop();

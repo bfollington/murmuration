@@ -3,14 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Process Manager - WebSocket Test</title>
+    <title>Process Manager Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
             background: #f5f5f5;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            height: 100vh;
+        }
+        .sidebar {
+            background: #1e293b;
+            color: white;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .sidebar h1 {
+            font-size: 20px;
+            margin: 0 0 20px 0;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #475569;
+        }
+        .nav-item {
+            padding: 10px 15px;
+            margin: 5px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .nav-item:hover {
+            background: #334155;
+        }
+        .nav-item.active {
+            background: #3b82f6;
+        }
+        .main-content {
+            padding: 20px;
+            overflow-y: auto;
         }
         .container {
             background: white;
@@ -18,6 +52,12 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+        }
+        .section {
+            display: none;
+        }
+        .section.active {
+            display: block;
         }
         h1, h2 {
             margin-top: 0;
@@ -132,55 +172,530 @@
             color: #065f46;
             border: 1px solid #a7f3d0;
         }
+        
+        /* Knowledge browser styles */
+        .knowledge-list {
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .knowledge-item {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .knowledge-item:hover {
+            background: #f9fafb;
+        }
+        .knowledge-item:last-child {
+            border-bottom: none;
+        }
+        .knowledge-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+        .knowledge-type.question { background: #dbeafe; color: #1e40af; }
+        .knowledge-type.answer { background: #d1fae5; color: #065f46; }
+        .knowledge-type.note { background: #fef3c7; color: #92400e; }
+        .knowledge-tags {
+            display: inline-flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #e5e7eb;
+            color: #374151;
+            border-radius: 12px;
+            font-size: 11px;
+        }
+        .priority {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .priority.high { background: #fee2e2; color: #991b1b; }
+        .priority.medium { background: #fef3c7; color: #92400e; }
+        .priority.low { background: #e0e7ff; color: #3730a3; }
+        
+        /* Forms */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #374151;
+        }
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        /* Charts container */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .chart-container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .chart-container h3 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            color: #1f2937;
+        }
+        
+        /* Queue visualization */
+        .queue-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+        
+        /* Search and filters */
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .search-bar input {
+            flex: 1;
+        }
+        .filter-chips {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .filter-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            background: #e5e7eb;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .filter-chip.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .filter-chip .remove {
+            margin-left: 6px;
+            cursor: pointer;
+        }
+        
+        /* Loading states */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #e5e7eb;
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Empty states */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+            opacity: 0.3;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+        }
     </style>
 </head>
 <body>
-    <h1>Process Manager - WebSocket Test</h1>
-    
-    <div class="container">
-        <h2>Connection Status</h2>
-        <p>WebSocket: <span id="status" class="status disconnected">Disconnected</span></p>
-        <p>Server: <span id="server-url">ws://localhost:8080/ws</span></p>
-        <div class="controls">
-            <button id="connect-btn">Connect</button>
-            <button id="disconnect-btn" disabled>Disconnect</button>
+    <div class="dashboard">
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+            <h1>Process Manager</h1>
+            <div class="nav-item active" data-section="overview">
+                Dashboard
+            </div>
+            <div class="nav-item" data-section="processes">
+                Processes
+            </div>
+            <div class="nav-item" data-section="queue">
+                Queue
+            </div>
+            <div class="nav-item" data-section="knowledge">
+                Knowledge Base
+            </div>
+            <div class="nav-item" data-section="metrics">
+                Metrics
+            </div>
         </div>
-    </div>
 
-    <div class="container">
-        <h2>Start New Process</h2>
-        <div class="controls">
-            <input type="text" id="process-title" placeholder="Process Title" style="flex: 1;">
-            <select id="process-script">
-                <option value="echo">Echo</option>
-                <option value="sleep">Sleep</option>
-                <option value="python3">Python</option>
-                <option value="node">Node.js</option>
-                <option value="deno">Deno</option>
-            </select>
-            <input type="text" id="process-args" placeholder="Arguments (space separated)" style="flex: 2;">
-            <button id="start-process-btn" disabled>Start Process</button>
-        </div>
-        <div id="start-message"></div>
-    </div>
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Connection Status Bar -->
+            <div class="container">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>Connection Status:</strong>
+                        <span id="status" class="status disconnected">Disconnected</span>
+                        <span id="server-url" style="margin-left: 10px; color: #6b7280;">ws://localhost:8080/ws</span>
+                    </div>
+                    <div class="controls" style="margin: 0;">
+                        <button id="connect-btn">Connect</button>
+                        <button id="disconnect-btn" disabled>Disconnect</button>
+                    </div>
+                </div>
+            </div>
 
-    <div class="container">
-        <h2>Active Processes</h2>
-        <div class="controls">
-            <button id="refresh-btn" disabled>Refresh List</button>
-        </div>
-        <div id="process-list" class="process-list">
-            <div class="process-item">
-                <span style="color: #6b7280;">No processes. Connect to server to view processes.</span>
+            <!-- Dashboard Overview Section -->
+            <div id="overview-section" class="section active">
+                <h1>Dashboard Overview</h1>
+                
+                <div class="queue-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-running">0</div>
+                        <div class="stat-label">Running Processes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-queued">0</div>
+                        <div class="stat-label">Queued</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-knowledge">0</div>
+                        <div class="stat-label">Knowledge Entries</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-questions">0</div>
+                        <div class="stat-label">Open Questions</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3>Process Status Distribution</h3>
+                        <canvas id="statusChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Queue Priority Distribution</h3>
+                        <canvas id="queueChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Process Activity (Last Hour)</h3>
+                        <canvas id="activityChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Knowledge Growth</h3>
+                        <canvas id="knowledgeChart" width="300" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processes Section -->
+            <div id="processes-section" class="section">
+                <h1>Process Management</h1>
+                
+                <div class="container">
+                    <h2>Start New Process</h2>
+                    <div class="controls">
+                        <input type="text" id="process-title" placeholder="Process Title" style="flex: 1;">
+                        <select id="process-script">
+                            <option value="echo">Echo</option>
+                            <option value="sleep">Sleep</option>
+                            <option value="python3">Python</option>
+                            <option value="node">Node.js</option>
+                            <option value="deno">Deno</option>
+                        </select>
+                        <input type="text" id="process-args" placeholder="Arguments (space separated)" style="flex: 2;">
+                        <button id="start-process-btn" disabled>Start Process</button>
+                    </div>
+                    <div id="start-message"></div>
+                </div>
+
+                <div class="container">
+                    <h2>Active Processes</h2>
+                    <div class="controls">
+                        <button id="refresh-btn" disabled>Refresh List</button>
+                    </div>
+                    <div id="process-list" class="process-list">
+                        <div class="process-item">
+                            <span style="color: #6b7280;">No processes. Connect to server to view processes.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="container">
+                    <h2>Process Logs</h2>
+                    <p>Select a process to view its logs</p>
+                    <div id="log-viewer" class="log-viewer">
+                        <div class="log-entry log-system">No process selected</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Queue Section -->
+            <div id="queue-section" class="section">
+                <h1>Process Queue</h1>
+                
+                <div class="queue-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="queue-pending">0</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="queue-processing">0</div>
+                        <div class="stat-label">Processing</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="queue-completed">0</div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="queue-failed">0</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
+
+                <div class="container">
+                    <h2>Queue Entries</h2>
+                    <div class="filter-chips">
+                        <div class="filter-chip active" data-status="all">All</div>
+                        <div class="filter-chip" data-status="pending">Pending</div>
+                        <div class="filter-chip" data-status="processing">Processing</div>
+                        <div class="filter-chip" data-status="completed">Completed</div>
+                        <div class="filter-chip" data-status="failed">Failed</div>
+                    </div>
+                    <div id="queue-list" class="process-list">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <p>No queue entries</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3>Queue Wait Time Distribution</h3>
+                        <canvas id="waitTimeChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Throughput (Last Hour)</h3>
+                        <canvas id="throughputChart" width="300" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Knowledge Section -->
+            <div id="knowledge-section" class="section">
+                <h1>Knowledge Base</h1>
+                
+                <div class="container">
+                    <div class="search-bar">
+                        <input type="text" id="knowledge-search" placeholder="Search knowledge base...">
+                        <button id="search-knowledge-btn">Search</button>
+                        <button id="add-knowledge-btn">Add Entry</button>
+                    </div>
+                    
+                    <div class="filter-chips">
+                        <div class="filter-chip active" data-type="all">All Types</div>
+                        <div class="filter-chip" data-type="question">Questions</div>
+                        <div class="filter-chip" data-type="answer">Answers</div>
+                        <div class="filter-chip" data-type="note">Notes</div>
+                    </div>
+                    
+                    <div id="knowledge-list" class="knowledge-list">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📚</div>
+                            <p>No knowledge entries yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Section -->
+            <div id="metrics-section" class="section">
+                <h1>System Metrics</h1>
+                
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3>Process Count Over Time</h3>
+                        <canvas id="processCountChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Average Queue Wait Time</h3>
+                        <canvas id="avgWaitChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Process Success Rate</h3>
+                        <canvas id="successRateChart" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Knowledge Entry Types</h3>
+                        <canvas id="knowledgeTypesChart" width="300" height="300"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="container">
-        <h2>Process Logs</h2>
-        <p>Select a process to view its logs</p>
-        <div id="log-viewer" class="log-viewer">
-            <div class="log-entry log-system">No process selected</div>
+    <!-- Modal for adding knowledge -->
+    <div id="knowledge-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Knowledge Entry</h2>
+                <button class="modal-close" onclick="closeKnowledgeModal()">&times;</button>
+            </div>
+            <form id="knowledge-form">
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="knowledge-type" onchange="updateKnowledgeForm()">
+                        <option value="question">Question</option>
+                        <option value="answer">Answer</option>
+                        <option value="note">Note</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Content</label>
+                    <textarea id="knowledge-content" required></textarea>
+                </div>
+                
+                <div class="form-group" id="priority-group">
+                    <label>Priority</label>
+                    <select id="knowledge-priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="question-group" style="display: none;">
+                    <label>Question ID</label>
+                    <input type="text" id="question-id" placeholder="ID of the question to answer">
+                </div>
+                
+                <div class="form-group" id="category-group" style="display: none;">
+                    <label>Category</label>
+                    <select id="knowledge-category">
+                        <option value="observation">Observation</option>
+                        <option value="todo">Todo</option>
+                        <option value="idea">Idea</option>
+                        <option value="documentation">Documentation</option>
+                        <option value="issue">Issue</option>
+                        <option value="solution">Solution</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Tags (comma separated)</label>
+                    <input type="text" id="knowledge-tags" placeholder="e.g. process, queue, performance">
+                </div>
+                
+                <div class="form-group">
+                    <label>Related Process ID (optional)</label>
+                    <input type="text" id="knowledge-process-id" placeholder="Link to a specific process">
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit">Add Entry</button>
+                    <button type="button" onclick="closeKnowledgeModal()">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -188,6 +703,12 @@
         let ws = null;
         let selectedProcessId = null;
         let processes = new Map();
+        let knowledgeEntries = new Map();
+        let queueEntries = new Map();
+        let charts = {};
+        let currentSection = 'overview';
+        let currentKnowledgeFilter = 'all';
+        let currentQueueFilter = 'all';
 
         // UI Elements
         const statusEl = document.getElementById('status');
@@ -438,9 +959,516 @@
 
         refreshBtn.addEventListener('click', refreshProcessList);
 
+        // Navigation functionality
+        function initializeNavigation() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const section = item.dataset.section;
+                    switchSection(section);
+                });
+            });
+        }
+
+        function switchSection(section) {
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.section === section);
+            });
+            
+            // Update sections
+            document.querySelectorAll('.section').forEach(sec => {
+                sec.classList.toggle('active', sec.id === `${section}-section`);
+            });
+            
+            currentSection = section;
+            
+            // Refresh data for the active section
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                switch(section) {
+                    case 'overview':
+                        refreshDashboard();
+                        break;
+                    case 'processes':
+                        refreshProcessList();
+                        break;
+                    case 'queue':
+                        refreshQueueData();
+                        break;
+                    case 'knowledge':
+                        refreshKnowledgeData();
+                        break;
+                    case 'metrics':
+                        refreshMetrics();
+                        break;
+                }
+            }
+        }
+
+        // Knowledge functionality
+        function refreshKnowledgeData() {
+            sendMessage('list_knowledge', { limit: 100 });
+        }
+
+        function displayKnowledgeEntries(entries) {
+            knowledgeEntries.clear();
+            entries.forEach(entry => knowledgeEntries.set(entry.id, entry));
+            
+            const filtered = filterKnowledgeEntries(entries);
+            const listEl = document.getElementById('knowledge-list');
+            
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📚</div>
+                        <p>No knowledge entries found</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listEl.innerHTML = filtered.map(entry => `
+                <div class="knowledge-item" onclick="viewKnowledgeDetail('${entry.id}')">
+                    <div>
+                        <span class="knowledge-type ${entry.type}">${entry.type}</span>
+                        ${entry.type === 'question' && entry.priority ? 
+                            `<span class="priority ${entry.priority}">${entry.priority}</span>` : ''}
+                        ${entry.type === 'question' && !entry.answered ? 
+                            '<span style="color: #ef4444; font-size: 11px; margin-left: 8px;">Unanswered</span>' : ''}
+                        ${entry.type === 'answer' && entry.accepted ? 
+                            '<span style="color: #10b981; font-size: 11px; margin-left: 8px;">✓ Accepted</span>' : ''}
+                    </div>
+                    <div style="margin-top: 5px; color: #1f2937;">
+                        ${entry.content.substring(0, 150)}${entry.content.length > 150 ? '...' : ''}
+                    </div>
+                    ${entry.tags && entry.tags.length > 0 ? `
+                        <div class="knowledge-tags">
+                            ${entry.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                    <div style="font-size: 11px; color: #6b7280; margin-top: 5px;">
+                        ${new Date(entry.timestamp).toLocaleString()}
+                        ${entry.processId ? ` • Process: ${entry.processId}` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterKnowledgeEntries(entries) {
+            let filtered = entries;
+            
+            if (currentKnowledgeFilter !== 'all') {
+                filtered = filtered.filter(entry => entry.type === currentKnowledgeFilter);
+            }
+            
+            const searchTerm = document.getElementById('knowledge-search')?.value.toLowerCase();
+            if (searchTerm) {
+                filtered = filtered.filter(entry => 
+                    entry.content.toLowerCase().includes(searchTerm) ||
+                    entry.tags?.some(tag => tag.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            return filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }
+
+        function viewKnowledgeDetail(entryId) {
+            const entry = knowledgeEntries.get(entryId);
+            if (!entry) return;
+            
+            // Could open a modal with full details
+            console.log('View knowledge detail:', entry);
+        }
+
+        function showKnowledgeModal() {
+            document.getElementById('knowledge-modal').classList.add('active');
+            updateKnowledgeForm();
+        }
+
+        function closeKnowledgeModal() {
+            document.getElementById('knowledge-modal').classList.remove('active');
+            document.getElementById('knowledge-form').reset();
+        }
+
+        function updateKnowledgeForm() {
+            const type = document.getElementById('knowledge-type').value;
+            document.getElementById('priority-group').style.display = type === 'question' ? 'block' : 'none';
+            document.getElementById('question-group').style.display = type === 'answer' ? 'block' : 'none';
+            document.getElementById('category-group').style.display = type === 'note' ? 'block' : 'none';
+        }
+
+        // Queue functionality
+        function refreshQueueData() {
+            sendMessage('get_queue_stats');
+            sendMessage('list_queue_entries', { limit: 100 });
+        }
+
+        function displayQueueEntries(entries) {
+            queueEntries.clear();
+            entries.forEach(entry => queueEntries.set(entry.id, entry));
+            
+            const filtered = filterQueueEntries(entries);
+            const listEl = document.getElementById('queue-list');
+            
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <p>No queue entries</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listEl.innerHTML = filtered.map(entry => `
+                <div class="process-item">
+                    <div class="process-info">
+                        <div class="process-title">${entry.process.title}</div>
+                        <div class="process-details">
+                            ${entry.process.script_name} | Priority: ${entry.priority} | 
+                            Queued: ${new Date(entry.queuedAt).toLocaleTimeString()}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="process-status ${entry.status}">${entry.status}</span>
+                        ${entry.status === 'pending' ? 
+                            `<button onclick="cancelQueueEntry('${entry.id}')" style="margin-left: 8px;">Cancel</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterQueueEntries(entries) {
+            if (currentQueueFilter === 'all') return entries;
+            return entries.filter(entry => entry.status === currentQueueFilter);
+        }
+
+        function cancelQueueEntry(entryId) {
+            if (confirm('Cancel this queued process?')) {
+                sendMessage('cancel_queue_entry', { entryId });
+            }
+        }
+
+        // Charts initialization
+        function initializeCharts() {
+            // Status distribution chart
+            const statusCtx = document.getElementById('statusChart')?.getContext('2d');
+            if (statusCtx) {
+                charts.status = new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Running', 'Starting', 'Stopped', 'Failed'],
+                        datasets: [{
+                            data: [0, 0, 0, 0],
+                            backgroundColor: ['#34d399', '#fbbf24', '#94a3b8', '#f87171']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Queue priority chart
+            const queueCtx = document.getElementById('queueChart')?.getContext('2d');
+            if (queueCtx) {
+                charts.queue = new Chart(queueCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+                        datasets: [{
+                            label: 'Queue Count',
+                            data: Array(10).fill(0),
+                            backgroundColor: '#3b82f6'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+
+            // Activity chart
+            const activityCtx = document.getElementById('activityChart')?.getContext('2d');
+            if (activityCtx) {
+                charts.activity = new Chart(activityCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Started',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)'
+                        }, {
+                            label: 'Completed',
+                            data: [],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+
+            // Knowledge growth chart
+            const knowledgeCtx = document.getElementById('knowledgeChart')?.getContext('2d');
+            if (knowledgeCtx) {
+                charts.knowledge = new Chart(knowledgeCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Knowledge Entries',
+                            data: [],
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Update dashboard stats
+        function updateDashboardStats(stats) {
+            document.getElementById('stat-running').textContent = stats.runningProcesses || 0;
+            document.getElementById('stat-queued').textContent = stats.queuedProcesses || 0;
+            document.getElementById('stat-knowledge').textContent = stats.knowledgeEntries || 0;
+            document.getElementById('stat-questions').textContent = stats.openQuestions || 0;
+        }
+
+        // Update charts with new data
+        function updateCharts(data) {
+            if (charts.status && data.processStatus) {
+                charts.status.data.datasets[0].data = [
+                    data.processStatus.running || 0,
+                    data.processStatus.starting || 0,
+                    data.processStatus.stopped || 0,
+                    data.processStatus.failed || 0
+                ];
+                charts.status.update();
+            }
+
+            if (charts.queue && data.queuePriority) {
+                charts.queue.data.datasets[0].data = data.queuePriority;
+                charts.queue.update();
+            }
+        }
+
+        // Refresh functions
+        function refreshDashboard() {
+            sendMessage('get_dashboard_stats');
+            refreshProcessList();
+            refreshQueueData();
+            refreshKnowledgeData();
+        }
+
+        function refreshMetrics() {
+            sendMessage('get_metrics_data');
+        }
+
+        // Extended message handling
+        function handleMessage(message) {
+            console.log('Received message:', message);
+            
+            switch (message.type) {
+                case 'connected':
+                    console.log('Server acknowledged connection:', message.data);
+                    initializeCharts();
+                    refreshDashboard();
+                    break;
+                    
+                case 'process_list':
+                    updateProcessList(message.data.processes);
+                    break;
+                    
+                case 'process_status':
+                    updateProcess(message.data.process);
+                    break;
+                    
+                case 'process_started':
+                    showMessage(startMessageEl, `Process started: ${message.data.processId}`, 'success');
+                    refreshProcessList();
+                    break;
+                    
+                case 'process_stopped':
+                case 'process_failed':
+                    updateProcess(message.data.process);
+                    break;
+                    
+                case 'process_state_changed':
+                    if (processes.has(message.data.processId)) {
+                        requestProcessStatus(message.data.processId);
+                    }
+                    break;
+                    
+                case 'process_logs':
+                    if (message.data.processId === selectedProcessId) {
+                        displayLogs(message.data.logs);
+                    }
+                    break;
+                    
+                case 'process_logs_updated':
+                    if (message.data.processId === selectedProcessId) {
+                        appendLogs(message.data.logs);
+                    }
+                    break;
+                    
+                case 'knowledge_list':
+                    displayKnowledgeEntries(message.data.entries);
+                    break;
+                    
+                case 'knowledge_created':
+                    showMessage(startMessageEl, 'Knowledge entry created', 'success');
+                    refreshKnowledgeData();
+                    break;
+                    
+                case 'knowledge_updated':
+                    knowledgeEntries.set(message.data.entry.id, message.data.entry);
+                    if (currentSection === 'knowledge') {
+                        displayKnowledgeEntries(Array.from(knowledgeEntries.values()));
+                    }
+                    break;
+                    
+                case 'queue_stats':
+                    updateQueueStats(message.data.stats);
+                    break;
+                    
+                case 'queue_entries':
+                    displayQueueEntries(message.data.entries);
+                    break;
+                    
+                case 'queue_entry_updated':
+                    queueEntries.set(message.data.entry.id, message.data.entry);
+                    if (currentSection === 'queue') {
+                        displayQueueEntries(Array.from(queueEntries.values()));
+                    }
+                    break;
+                    
+                case 'dashboard_stats':
+                    updateDashboardStats(message.data);
+                    updateCharts(message.data);
+                    break;
+                    
+                case 'metrics_data':
+                    updateMetricsCharts(message.data);
+                    break;
+                    
+                case 'error':
+                    showMessage(startMessageEl, `Error: ${message.data.message}`, 'error');
+                    break;
+            }
+        }
+
+        function updateQueueStats(stats) {
+            document.getElementById('queue-pending').textContent = stats.pending || 0;
+            document.getElementById('queue-processing').textContent = stats.processing || 0;
+            document.getElementById('queue-completed').textContent = stats.completed || 0;
+            document.getElementById('queue-failed').textContent = stats.failed || 0;
+        }
+
+        function updateMetricsCharts(data) {
+            // Update metrics charts with historical data
+            // Implementation depends on the data structure from the server
+        }
+
+        // Initialize event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeNavigation();
+            
+            // Knowledge filters
+            document.querySelectorAll('.filter-chip[data-type]').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-chip[data-type]').forEach(c => 
+                        c.classList.remove('active'));
+                    chip.classList.add('active');
+                    currentKnowledgeFilter = chip.dataset.type;
+                    displayKnowledgeEntries(Array.from(knowledgeEntries.values()));
+                });
+            });
+            
+            // Queue filters
+            document.querySelectorAll('.filter-chip[data-status]').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-chip[data-status]').forEach(c => 
+                        c.classList.remove('active'));
+                    chip.classList.add('active');
+                    currentQueueFilter = chip.dataset.status;
+                    displayQueueEntries(Array.from(queueEntries.values()));
+                });
+            });
+            
+            // Knowledge search
+            document.getElementById('search-knowledge-btn')?.addEventListener('click', () => {
+                displayKnowledgeEntries(Array.from(knowledgeEntries.values()));
+            });
+            
+            document.getElementById('knowledge-search')?.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    displayKnowledgeEntries(Array.from(knowledgeEntries.values()));
+                }
+            });
+            
+            // Add knowledge button
+            document.getElementById('add-knowledge-btn')?.addEventListener('click', showKnowledgeModal);
+            
+            // Knowledge form submission
+            document.getElementById('knowledge-form')?.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const type = document.getElementById('knowledge-type').value;
+                const content = document.getElementById('knowledge-content').value;
+                const tags = document.getElementById('knowledge-tags').value
+                    .split(',').map(t => t.trim()).filter(t => t);
+                const processId = document.getElementById('knowledge-process-id').value || undefined;
+                
+                let data = { content, tags, processId };
+                
+                if (type === 'question') {
+                    data.priority = document.getElementById('knowledge-priority').value;
+                    sendMessage('create_question', data);
+                } else if (type === 'answer') {
+                    data.questionId = document.getElementById('question-id').value;
+                    sendMessage('create_answer', data);
+                } else if (type === 'note') {
+                    data.category = document.getElementById('knowledge-category').value;
+                    sendMessage('create_note', data);
+                }
+                
+                closeKnowledgeModal();
+            });
+        });
+
         // Make functions available globally for onclick handlers
         window.viewProcessLogs = viewProcessLogs;
         window.stopProcess = stopProcess;
+        window.viewKnowledgeDetail = viewKnowledgeDetail;
+        window.cancelQueueEntry = cancelQueueEntry;
+        window.closeKnowledgeModal = closeKnowledgeModal;
+        window.updateKnowledgeForm = updateKnowledgeForm;
     </script>
 </body>
 </html>

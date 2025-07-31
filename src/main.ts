@@ -11,6 +11,8 @@ import { MCPProcessServer } from './mcp/server.ts';
 import { ProcessManager } from './process/manager.ts';
 import { ProcessRegistry } from './process/registry.ts';
 import { ProcessMonitoringConfig } from './process/types.ts';
+import { KnowledgeManager } from './knowledge/manager.ts';
+import { IntegratedQueueManager } from './queue/integrated-manager.ts';
 
 /**
  * Initialize and start the MCP Process Server
@@ -48,8 +50,20 @@ async function main(): Promise<void> {
     // Create ProcessManager with registry and monitoring config
     const processManager = new ProcessManager(registry, monitoringConfig);
     
-    // Create MCP server with ProcessManager dependency injection
-    const mcpServer = new MCPProcessServer(processManager);
+    // Create KnowledgeManager for Q&A and notes
+    const knowledgeManager = new KnowledgeManager();
+    
+    // Create IntegratedQueueManager for process queuing
+    const queueManager = new IntegratedQueueManager(processManager, {
+      maxConcurrentProcesses: 5,
+      autoStart: true,
+      persistInterval: 30000,
+      restoreOnStartup: true,
+      persistPath: './queue-state.json'
+    });
+    
+    // Create MCP server with all manager dependencies
+    const mcpServer = new MCPProcessServer(processManager, knowledgeManager, queueManager);
     
     // Start the MCP server
     log('[Main] Starting MCP server with stdio transport...');
@@ -63,8 +77,18 @@ async function main(): Promise<void> {
       log(`[Main] Received ${signal}, shutting down gracefully...`);
       
       try {
+        // Stop the MCP server (which also shuts down ProcessManager)
         await mcpServer.stop();
         log('[Main] MCP server stopped successfully');
+        
+        // Shutdown the queue manager
+        await queueManager.shutdown();
+        log('[Main] Queue manager shutdown complete');
+        
+        // Save knowledge if needed
+        await knowledgeManager.save();
+        log('[Main] Knowledge saved');
+        
         Deno.exit(0);
       } catch (error) {
         logError('[Main] Error during shutdown:', error);

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+echo "Testing Web UI Enhancements..."
+echo "=============================="
+echo ""
+echo "Starting the web server with all managers..."
+echo ""
+echo "1. Open your browser to: http://localhost:8080/src/web/client.html"
+echo "2. Click 'Connect' to establish WebSocket connection"
+echo ""
+echo "Testing checklist:"
+echo "- [ ] Dashboard overview shows process, queue, and knowledge stats"
+echo "- [ ] Navigation between sections works (Dashboard, Processes, Queue, Knowledge, Metrics)"
+echo "- [ ] Process management still works (start, stop, view logs)"
+echo "- [ ] Knowledge browser displays entries"
+echo "- [ ] Can create questions, answers, and notes"
+echo "- [ ] Queue visualization shows entries"
+echo "- [ ] Charts display correctly on Dashboard and Metrics sections"
+echo "- [ ] Real-time updates work (stats update every 5 seconds)"
+echo ""
+echo "Starting server..."
+echo ""
+
+cd "$(dirname "$0")"
+deno run --allow-all src/web/main.ts
