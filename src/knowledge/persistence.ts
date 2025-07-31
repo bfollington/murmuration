@@ -94,10 +94,10 @@ export class KnowledgePersistence {
       
       // Try to load from backup
       try {
-        console.warn("Failed to load main data file, trying backup:", error instanceof Error ? error.message : String(error));
+        // Silently try backup
         return await this.loadFromBackup();
       } catch (backupError) {
-        console.error("Failed to load backup file:", backupError);
+        // Both files failed
         throw new Error(`Failed to load knowledge data: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -140,7 +140,7 @@ export class KnowledgePersistence {
       await Deno.copyFile(this.dataFile, this.backupFile);
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) {
-        console.warn("Failed to create backup:", error instanceof Error ? error.message : String(error));
+        // Backup failed, but continue with main save
       }
       // Continue even if backup fails
     }
@@ -195,7 +195,7 @@ export class KnowledgePersistence {
         this.isLocked = false;
       } catch (error) {
         if (!(error instanceof Deno.errors.NotFound)) {
-          console.error("Failed to release lock:", error);
+          // Failed to release lock, ignore
         }
       }
     }

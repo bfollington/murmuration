@@ -7,11 +7,12 @@
 
 export class Logger {
   private static _instance: Logger;
-  private isMCPMode: boolean;
+  private debugMode: boolean;
 
   private constructor() {
-    // Detect MCP mode: no DEBUG env and stdout is not a TTY (piped)
-    this.isMCPMode = !Deno.env.get('DEBUG') && !Deno.stdout.isTerminal();
+    // Only output logs if DEBUG is explicitly set to 'true'
+    // This ensures no output interferes with MCP/JSON-RPC communication
+    this.debugMode = Deno.env.get('DEBUG') === 'true';
   }
 
   static getInstance(): Logger {
@@ -22,13 +23,13 @@ export class Logger {
   }
 
   log(component: string, message: string): void {
-    if (!this.isMCPMode) {
-      console.log(`[${component}] ${message}`);
+    if (this.debugMode) {
+      console.error(`[${component}] ${message}`);
     }
   }
 
   error(component: string, message: string, error?: unknown): void {
-    if (!this.isMCPMode) {
+    if (this.debugMode) {
       if (error) {
         console.error(`[${component}] ERROR: ${message}`, error);
       } else {
@@ -38,24 +39,24 @@ export class Logger {
   }
 
   debug(component: string, message: string): void {
-    if (Deno.env.get('DEBUG') === 'true') {
-      console.log(`[${component}] DEBUG: ${message}`);
+    if (this.debugMode) {
+      console.error(`[${component}] DEBUG: ${message}`);
     }
   }
 
   warn(component: string, message: string, error?: unknown): void {
-    if (!this.isMCPMode) {
+    if (this.debugMode) {
       if (error) {
-        console.warn(`[${component}] WARNING: ${message}`, error);
+        console.error(`[${component}] WARNING: ${message}`, error);
       } else {
-        console.warn(`[${component}] WARNING: ${message}`);
+        console.error(`[${component}] WARNING: ${message}`);
       }
     }
   }
 
   info(component: string, message: string): void {
-    if (!this.isMCPMode) {
-      console.info(`[${component}] INFO: ${message}`);
+    if (this.debugMode) {
+      console.error(`[${component}] INFO: ${message}`);
     }
   }
 }

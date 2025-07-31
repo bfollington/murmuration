@@ -18,23 +18,22 @@ import { IntegratedQueueManager } from './queue/integrated-manager.ts';
  * Initialize and start the MCP Process Server
  */
 async function main(): Promise<void> {
-  // In MCP mode, we must suppress all console output to avoid interfering with JSON-RPC
-  const isMCPMode = !Deno.env.get('DEBUG') && !Deno.stdout.isTerminal();
+  // Always suppress console output unless DEBUG is explicitly set
+  // This ensures compatibility with MCP clients like Claude Code
+  const debugMode = Deno.env.get('DEBUG') === 'true';
   
-  // Create a logger that respects MCP mode
+  // Create a logger that only outputs in debug mode
   const log = (message: string) => {
-    if (!isMCPMode) {
-      console.log(message);
+    if (debugMode) {
+      console.error(`[DEBUG] ${message}`); // Use stderr for debug logs
     }
   };
   
   const logError = (message: string, error?: unknown) => {
-    if (!isMCPMode) {
-      console.error(message, error);
+    if (debugMode) {
+      console.error(`[ERROR] ${message}`, error);
     }
   };
-  
-  log('[Main] Starting MCP Process Server...');
   
   try {
     // Create ProcessRegistry for process storage
@@ -66,32 +65,23 @@ async function main(): Promise<void> {
     const mcpServer = new MCPProcessServer(processManager, knowledgeManager, queueManager);
     
     // Start the MCP server
-    log('[Main] Starting MCP server with stdio transport...');
     await mcpServer.start();
-    
-    log('[Main] MCP Process Server is running and ready for client connections');
-    log('[Main] Server Info: ' + JSON.stringify(mcpServer.getServerInfo(), null, 2));
     
     // Handle graceful shutdown on SIGINT (Ctrl+C)
     const handleShutdown = async (signal: string) => {
-      log(`[Main] Received ${signal}, shutting down gracefully...`);
-      
       try {
         // Stop the MCP server (which also shuts down ProcessManager)
         await mcpServer.stop();
-        log('[Main] MCP server stopped successfully');
         
         // Shutdown the queue manager
         await queueManager.shutdown();
-        log('[Main] Queue manager shutdown complete');
         
         // Save knowledge if needed
         await knowledgeManager.save();
-        log('[Main] Knowledge saved');
         
         Deno.exit(0);
       } catch (error) {
-        logError('[Main] Error during shutdown:', error);
+        // In MCP mode, we cannot log errors during shutdown
         Deno.exit(1);
       }
     };
@@ -99,9 +89,6 @@ async function main(): Promise<void> {
     // Set up signal handlers for graceful shutdown
     Deno.addSignalListener('SIGINT', () => handleShutdown('SIGINT'));
     Deno.addSignalListener('SIGTERM', () => handleShutdown('SIGTERM'));
-    
-    // Keep the process running
-    log('[Main] Press Ctrl+C to stop the server');
     
     // Wait indefinitely - the server handles all client communication via stdio
     while (true) {
@@ -125,7 +112,11 @@ async function main(): Promise<void> {
  */
 if (import.meta.main) {
   main().catch((error) => {
-    console.error('[Main] Unhandled error:', error);
+    // Only log errors if not in MCP mode
+    const isMCPMode = !Deno.env.get('DEBUG') && !Deno.stdout.isTerminal();
+    if (!isMCPMode) {
+      console.error('[Main] Unhandled error:', error);
+    }
     Deno.exit(1);
   });
 }

@@ -88,9 +88,9 @@ export class KnowledgeManager {
 
       // Auto-save if enabled
       if (this.autoSave) {
-        this.save().catch(error => 
-          console.error("Failed to auto-save after creating question:", error)
-        );
+        this.save().catch(() => {
+          // Auto-save failed, ignore
+        });
       }
 
       return { success: true, data: question };
@@ -167,9 +167,9 @@ export class KnowledgeManager {
 
       // Auto-save if enabled
       if (this.autoSave) {
-        this.save().catch(error => 
-          console.error("Failed to auto-save after creating answer:", error)
-        );
+        this.save().catch(() => {
+          // Auto-save failed, ignore
+        });
       }
 
       return { success: true, data: answer };
@@ -240,9 +240,9 @@ export class KnowledgeManager {
 
       // Auto-save if enabled
       if (this.autoSave) {
-        this.save().catch(error => 
-          console.error("Failed to auto-save after creating note:", error)
-        );
+        this.save().catch(() => {
+          // Auto-save failed, ignore
+        });
       }
 
       return { success: true, data: note };
@@ -330,9 +330,9 @@ export class KnowledgeManager {
 
       // Auto-save if enabled
       if (this.autoSave) {
-        this.save().catch(error => 
-          console.error("Failed to auto-save after updating entry:", error)
-        );
+        this.save().catch(() => {
+          // Auto-save failed, ignore
+        });
       }
 
       return { success: true, data: updated };
@@ -394,9 +394,9 @@ export class KnowledgeManager {
 
       // Auto-save if enabled
       if (this.autoSave) {
-        this.save().catch(error => 
-          console.error("Failed to auto-save after deleting entry:", error)
-        );
+        this.save().catch(() => {
+          // Auto-save failed, ignore
+        });
       }
 
       return { success: true };
@@ -503,9 +503,9 @@ export class KnowledgeManager {
   clear(): void {
     this.registry.clear();
     if (this.autoSave) {
-      this.save().catch(error => 
-        console.error("Failed to save after clear:", error)
-      );
+      this.save().catch(() => {
+        // Save failed after clear, ignore
+      });
     }
   }
 
@@ -559,7 +559,7 @@ export class KnowledgeManager {
           }
         }
       } catch (error) {
-        console.error(`Failed to import entry ${entry.id}:`, error);
+        // Failed to import entry, skip
       }
     }
     

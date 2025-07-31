@@ -75,7 +75,7 @@ export class QueuePersistence {
       
       // Validate version
       if (state.version !== QueuePersistence.VERSION) {
-        console.warn(`Queue state version mismatch: expected ${QueuePersistence.VERSION}, got ${state.version}`);
+        // Version mismatch, but continue
       }
       
       return state.entries.map(this.deserializeEntry);

@@ -42,7 +42,7 @@ export class EventEmitter<T extends Record<string, unknown>> {
         try {
           listener(data);
         } catch (error) {
-          console.error(`Error in event listener for ${String(event)}:`, error);
+          // Error in event listener, ignore to prevent crashes
         }
       }
     }

@@ -209,7 +209,7 @@ export class CrossDomainEventManager {
       const failureRate = (data.failed / data.total) * 100;
       
       if (failureRate > 50) {
-        console.warn(`High failure rate in batch ${data.batchId}: ${failureRate.toFixed(1)}%`);
+        // High failure rate detected
       }
     }
   }
