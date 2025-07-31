@@ -17,7 +17,8 @@ import {
   Question,
   Answer,
   Note,
-  Issue
+  Issue,
+  Milestone
 } from './types.ts';
 import { 
   CROSS_REFERENCE_PATTERN, 
@@ -147,6 +148,18 @@ export function serializeToMarkdown(entry: KnowledgeEntry): string {
     if (issue.relatedIds && issue.relatedIds.length > 0) {
       (frontmatter as any).relatedIds = [...issue.relatedIds];
     }
+  } else if (entry.type === KnowledgeType.MILESTONE) {
+    const milestone = entry as Milestone;
+    (frontmatter as any).title = milestone.title;
+    if (milestone.targetDate) {
+      (frontmatter as any).targetDate = milestone.targetDate.toISOString();
+    }
+    if (typeof milestone.progress === 'number') {
+      (frontmatter as any).progress = milestone.progress;
+    }
+    if (milestone.relatedIssueIds && milestone.relatedIssueIds.length > 0) {
+      (frontmatter as any).relatedIssueIds = [...milestone.relatedIssueIds];
+    }
   }
   
   // Generate YAML frontmatter
@@ -239,6 +252,8 @@ export function parseCrossReferences(content: string): CrossReference[] {
       type = KnowledgeType.NOTE;
     } else if (id.startsWith('ISSUE_')) {
       type = KnowledgeType.ISSUE;
+    } else if (id.startsWith('MILESTONE_')) {
+      type = KnowledgeType.MILESTONE;
     } else {
       // Unknown type, skip
       continue;
@@ -299,6 +314,9 @@ export function convertFrontmatterDates(frontmatter: Record<string, unknown>): R
   }
   if (typeof converted.dueDate === 'string') {
     converted.dueDate = new Date(converted.dueDate);
+  }
+  if (typeof converted.targetDate === 'string') {
+    converted.targetDate = new Date(converted.targetDate);
   }
   
   return converted;

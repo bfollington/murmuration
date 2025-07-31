@@ -20,8 +20,11 @@ import {
   UpdateKnowledgeRequest,
   KnowledgeQuery,
   KnowledgeType,
-  EntryStatus
+  EntryStatus,
+  isIssue
 } from '../knowledge/types.ts';
+import { MilestoneManager } from '../knowledge/milestone-manager.ts';
+import { CreateMilestoneRequest, isValidCreateMilestoneRequest } from '../knowledge/types.ts';
 import { QueuedProcess, QueuePriority } from '../queue/types.ts';
 
 /**
@@ -35,6 +38,7 @@ export class MCPProcessServer {
   private readonly processManager: ProcessManager;
   private readonly knowledgeManager: KnowledgeManager | FileKnowledgeManager;
   private readonly queueManager: IntegratedQueueManager;
+  private readonly milestoneManager: MilestoneManager;
   private transport: StdioServerTransport | null = null;
   private isStarted = false;
   private startPromise: Promise<void> | null = null;
@@ -44,11 +48,13 @@ export class MCPProcessServer {
    * @param processManager - ProcessManager instance for direct process operations
    * @param knowledgeManager - KnowledgeManager or FileKnowledgeManager instance for Q&A, notes, and issues
    * @param queueManager - IntegratedQueueManager instance for queued process operations
+   * @param milestoneManager - MilestoneManager instance for milestone tracking
    */
   constructor(
     processManager: ProcessManager,
     knowledgeManager: KnowledgeManager | FileKnowledgeManager,
-    queueManager: IntegratedQueueManager
+    queueManager: IntegratedQueueManager,
+    milestoneManager: MilestoneManager
   ) {
     if (!processManager) {
       throw new Error('ProcessManager is required');
@@ -59,10 +65,14 @@ export class MCPProcessServer {
     if (!queueManager) {
       throw new Error('IntegratedQueueManager is required');
     }
+    if (!milestoneManager) {
+      throw new Error('MilestoneManager is required');
+    }
     
     this.processManager = processManager;
     this.knowledgeManager = knowledgeManager;
     this.queueManager = queueManager;
+    this.milestoneManager = milestoneManager;
     
     // Initialize MCP server with configuration
     this.server = new Server(
@@ -768,6 +778,62 @@ export class MCPProcessServer {
               required: ['issue_id'],
             },
           },
+          {
+            name: 'get_issue',
+            description: 'Get detailed information for a specific issue by ID.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                issue_id: {
+                  type: 'string',
+                  description: 'The ID of the issue to retrieve',
+                },
+              },
+              required: ['issue_id'],
+            },
+          },
+          {
+            name: 'get_milestone',
+            description: 'Retrieve the current milestone information.',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+              required: [],
+            },
+          },
+          {
+            name: 'set_milestone',
+            description: 'Set or update the current milestone with title, description, target date, and progress.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                title: {
+                  type: 'string',
+                  description: 'Brief milestone description',
+                },
+                description: {
+                  type: 'string',
+                  description: 'Detailed explanation of the milestone',
+                },
+                targetDate: {
+                  type: 'string',
+                  description: 'Target completion date in ISO format (YYYY-MM-DD)',
+                },
+                progress: {
+                  type: 'number',
+                  minimum: 0,
+                  maximum: 100,
+                  description: 'Progress percentage (0-100)',
+                },
+                relatedIssues: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Array of issue IDs related to this milestone',
+                },
+              },
+              required: ['title', 'description'],
+            },
+          },
         ],
       };
     });
@@ -823,6 +889,12 @@ export class MCPProcessServer {
             return await this.handleUpdateIssue(args);
           case 'delete_issue':
             return await this.handleDeleteIssue(args);
+          case 'get_issue':
+            return await this.handleGetIssue(args);
+          case 'get_milestone':
+            return await this.handleGetMilestone(args);
+          case 'set_milestone':
+            return await this.handleSetMilestone(args);
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -2767,6 +2839,280 @@ export class MCPProcessServer {
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to delete issue: ${errorMessage}`
+      );
+    }
+  }
+
+  /**
+   * Handle get_issue tool calls
+   * @param args - Tool arguments
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleGetIssue(args: unknown): Promise<CallToolResult> {
+    try {
+      // Validate arguments
+      if (!args || typeof args !== 'object') {
+        throw new McpError(ErrorCode.InvalidRequest, 'get_issue requires arguments');
+      }
+      
+      const params = args as Record<string, unknown>;
+      
+      if (!params.issue_id || typeof params.issue_id !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'issue_id is required and must be a string');
+      }
+      
+      // Get issue using FileKnowledgeManager
+      const entry = await (this.knowledgeManager as FileKnowledgeManager).getEntry(params.issue_id);
+      
+      if (!entry) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Issue with ID ${params.issue_id} not found`
+        );
+      }
+      
+      // Validate entry is an issue
+      if (!isIssue(entry)) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Entry with ID ${params.issue_id} is not an issue`
+        );
+      }
+      
+      // Extract title from metadata or content
+      const title = entry.metadata?.title || entry.content.split('\n')[0].replace(/^# /, '') || 'Untitled Issue';
+      
+      // Format response with summary text and JSON details
+      const summaryText = `Issue: ${title}\nStatus: ${entry.status}\nCreated: ${entry.timestamp.toISOString()}\nLast Updated: ${entry.lastUpdated.toISOString()}`;
+      
+      const issueDetails = {
+        id: entry.id,
+        title: title,
+        content: entry.content,
+        status: entry.status,
+        priority: entry.metadata?.priority || 'medium',
+        tags: entry.tags || [],
+        timestamp: entry.timestamp.toISOString(),
+        lastUpdated: entry.lastUpdated.toISOString(),
+        metadata: entry.metadata || {}
+      };
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: summaryText,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify(issueDetails, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`get_issue error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during retrieval';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get issue: ${errorMessage}`
+      );
+    }
+  }
+
+  /**
+   * Handle get_milestone tool calls
+   * @param args - Tool arguments (empty object)
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleGetMilestone(args: unknown): Promise<CallToolResult> {
+    try {
+      // Get current milestone
+      const milestoneResult = await this.milestoneManager.getCurrentMilestone();
+      
+      if (!milestoneResult.success) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to retrieve milestone: ${milestoneResult.error || 'Unknown error'}`
+        );
+      }
+      
+      if (!milestoneResult.data) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No milestone is currently set.',
+            },
+          ],
+        };
+      }
+      
+      const milestone = milestoneResult.data;
+      
+      // Format milestone information
+      const summaryText = `Current Milestone: ${milestone.title}\nProgress: ${milestone.progress}%\nTarget Date: ${milestone.targetDate ? milestone.targetDate.toISOString().split('T')[0] : 'Not set'}\nLast Updated: ${milestone.lastUpdated.toISOString()}`;
+      
+      const milestoneDetails = {
+        title: milestone.title,
+        description: milestone.description,
+        progress: milestone.progress,
+        targetDate: milestone.targetDate ? milestone.targetDate.toISOString().split('T')[0] : null,
+        relatedIssues: milestone.relatedIssueIds || [],
+        createdAt: milestone.timestamp.toISOString(),
+        lastUpdated: milestone.lastUpdated.toISOString(),
+      };
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: summaryText,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify(milestoneDetails, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`get_milestone error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during milestone retrieval';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to get milestone: ${errorMessage}`
+      );
+    }
+  }
+
+  /**
+   * Handle set_milestone tool calls
+   * @param args - Tool arguments containing milestone data
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleSetMilestone(args: unknown): Promise<CallToolResult> {
+    try {
+      // Validate arguments
+      if (!args || typeof args !== 'object') {
+        throw new McpError(ErrorCode.InvalidRequest, 'set_milestone requires arguments');
+      }
+      
+      const params = args as Record<string, unknown>;
+      
+      // Validate required fields
+      if (!params.title || typeof params.title !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'title is required and must be a string');
+      }
+      
+      if (!params.description || typeof params.description !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'description is required and must be a string');
+      }
+      
+      // Validate optional fields
+      if (params.progress !== undefined && (typeof params.progress !== 'number' || params.progress < 0 || params.progress > 100)) {
+        throw new McpError(ErrorCode.InvalidRequest, 'progress must be a number between 0 and 100');
+      }
+      
+      if (params.targetDate !== undefined && typeof params.targetDate !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'targetDate must be a string in ISO format');
+      }
+      
+      if (params.relatedIssues !== undefined && !Array.isArray(params.relatedIssues)) {
+        throw new McpError(ErrorCode.InvalidRequest, 'relatedIssues must be an array of strings');
+      }
+      
+      // Parse targetDate if provided
+      let targetDate: Date | undefined;
+      if (params.targetDate) {
+        try {
+          targetDate = new Date(params.targetDate as string);
+          if (isNaN(targetDate.getTime())) {
+            throw new McpError(ErrorCode.InvalidRequest, 'targetDate must be a valid date string');
+          }
+        } catch {
+          throw new McpError(ErrorCode.InvalidRequest, 'targetDate must be a valid date string');
+        }
+      }
+
+      // Create milestone request
+      const milestoneRequest: CreateMilestoneRequest = {
+        title: params.title as string,
+        description: params.description as string,
+        content: params.description as string, // Use description as content for now
+        progress: (params.progress as number) || 0,
+        targetDate: targetDate,
+        relatedIssueIds: (params.relatedIssues as string[]) || [],
+      };
+      
+      // Validate request using type guard
+      if (!isValidCreateMilestoneRequest(milestoneRequest)) {
+        throw new McpError(ErrorCode.InvalidRequest, 'Invalid milestone request format');
+      }
+      
+      // Set or update milestone
+      const milestoneResult = await this.milestoneManager.setMilestone(milestoneRequest);
+      
+      if (!milestoneResult.success) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to set milestone: ${milestoneResult.error || 'Unknown error'}`
+        );
+      }
+      
+      if (!milestoneResult.data) {
+        throw new McpError(ErrorCode.InternalError, 'Milestone was not created properly');
+      }
+      
+      const milestone = milestoneResult.data;
+      
+      // Format success response
+      const summaryText = `Milestone "${milestone.title}" has been set successfully.\nProgress: ${milestone.progress}%\nTarget Date: ${milestone.targetDate ? milestone.targetDate.toISOString().split('T')[0] : 'Not set'}`;
+      
+      const milestoneDetails = {
+        title: milestone.title,
+        description: milestone.description,
+        progress: milestone.progress,
+        targetDate: milestone.targetDate ? milestone.targetDate.toISOString().split('T')[0] : null,
+        relatedIssues: milestone.relatedIssueIds || [],
+        createdAt: milestone.timestamp.toISOString(),
+        lastUpdated: milestone.lastUpdated.toISOString(),
+      };
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: summaryText,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify(milestoneDetails, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`set_milestone error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during milestone setting';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to set milestone: ${errorMessage}`
       );
     }
   }

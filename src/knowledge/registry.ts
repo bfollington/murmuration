@@ -284,7 +284,8 @@ export class KnowledgeRegistry {
         questions: 0,
         answers: 0,
         notes: 0,
-        issues: 0
+        issues: 0,
+        milestones: 0
       },
       byStatus: {
         answeredQuestions: 0,

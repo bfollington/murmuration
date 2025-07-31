@@ -9,7 +9,8 @@ export enum KnowledgeType {
   QUESTION = 'question',
   ANSWER = 'answer',
   NOTE = 'note',
-  ISSUE = 'issue'
+  ISSUE = 'issue',
+  MILESTONE = 'milestone'
 }
 
 /**
@@ -78,6 +79,18 @@ export interface Issue extends KnowledgeEntry {
 }
 
 /**
+ * Milestone entry for tracking progress toward goals and deliverables
+ */
+export interface Milestone extends KnowledgeEntry {
+  type: KnowledgeType.MILESTONE;
+  title: string; // Brief milestone description
+  description: string; // Detailed explanation
+  targetDate?: Date; // Optional target completion date
+  progress?: number; // 0-100 percentage completion (optional)
+  relatedIssueIds: string[]; // For linked issues via [[ISSUE_X]]
+}
+
+/**
  * Knowledge query filters for searching and listing
  */
 export interface KnowledgeQuery {
@@ -132,6 +145,18 @@ export interface CreateIssueRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface CreateMilestoneRequest {
+  title: string; // Brief milestone description
+  description: string; // Detailed explanation  
+  content: string; // Additional content for the milestone
+  tags?: string[];
+  processId?: string;
+  targetDate?: Date; // Optional target completion date
+  progress?: number; // 0-100 percentage completion (optional)
+  relatedIssueIds?: string[]; // For linked issues via [[ISSUE_X]]
+  metadata?: Record<string, unknown>;
+}
+
 /**
  * Knowledge update request interface
  */
@@ -169,6 +194,7 @@ export interface KnowledgeStats {
     answers: number;
     notes: number;
     issues: number;
+    milestones: number;
   };
   byStatus: {
     answeredQuestions: number;
@@ -226,6 +252,10 @@ export function isIssue(entry: KnowledgeEntry): entry is Issue {
   return entry.type === KnowledgeType.ISSUE;
 }
 
+export function isMilestone(entry: KnowledgeEntry): entry is Milestone {
+  return entry.type === KnowledgeType.MILESTONE;
+}
+
 /**
  * Validation constants
  */
@@ -236,7 +266,13 @@ export const KNOWLEDGE_VALIDATION = {
   MAX_TAG_LENGTH: 50,
   MIN_TAG_LENGTH: 1,
   VALID_PRIORITIES: ['low', 'medium', 'high'] as const,
-  VALID_NOTE_CATEGORIES: ['observation', 'todo', 'idea', 'documentation', 'issue', 'solution'] as const
+  VALID_NOTE_CATEGORIES: ['observation', 'todo', 'idea', 'documentation', 'issue', 'solution'] as const,
+  MAX_TITLE_LENGTH: 200,
+  MIN_TITLE_LENGTH: 1,
+  MAX_DESCRIPTION_LENGTH: 2000,
+  MIN_DESCRIPTION_LENGTH: 1,
+  MIN_PROGRESS: 0,
+  MAX_PROGRESS: 100
 } as const;
 
 /**
@@ -395,6 +431,75 @@ export function isValidCreateIssueRequest(obj: unknown): obj is CreateIssueReque
 }
 
 /**
+ * Type guard to validate CreateMilestoneRequest
+ */
+export function isValidCreateMilestoneRequest(obj: unknown): obj is CreateMilestoneRequest {
+  if (!obj || typeof obj !== 'object') return false;
+  
+  const req = obj as Record<string, unknown>;
+  
+  // title is required
+  if (typeof req.title !== 'string' || 
+      req.title.length < KNOWLEDGE_VALIDATION.MIN_TITLE_LENGTH ||
+      req.title.length > KNOWLEDGE_VALIDATION.MAX_TITLE_LENGTH) {
+    return false;
+  }
+  
+  // description is required
+  if (typeof req.description !== 'string' || 
+      req.description.length < KNOWLEDGE_VALIDATION.MIN_DESCRIPTION_LENGTH ||
+      req.description.length > KNOWLEDGE_VALIDATION.MAX_DESCRIPTION_LENGTH) {
+    return false;
+  }
+  
+  // content validation
+  if (typeof req.content !== 'string' || 
+      req.content.length < KNOWLEDGE_VALIDATION.MIN_CONTENT_LENGTH ||
+      req.content.length > KNOWLEDGE_VALIDATION.MAX_CONTENT_LENGTH) {
+    return false;
+  }
+  
+  // tags validation (optional)
+  if (req.tags !== undefined) {
+    if (!Array.isArray(req.tags) || 
+        !req.tags.every(tag => typeof tag === 'string' && 
+                               tag.length >= KNOWLEDGE_VALIDATION.MIN_TAG_LENGTH &&
+                               tag.length <= KNOWLEDGE_VALIDATION.MAX_TAG_LENGTH) ||
+        req.tags.length > KNOWLEDGE_VALIDATION.MAX_TAGS) {
+      return false;
+    }
+  }
+  
+  // processId is optional but must be string if present
+  if (req.processId !== undefined && typeof req.processId !== 'string') {
+    return false;
+  }
+  
+  // targetDate is optional but must be Date if present
+  if (req.targetDate !== undefined && !(req.targetDate instanceof Date)) {
+    return false;
+  }
+  
+  // progress is optional but must be valid number if present
+  if (req.progress !== undefined) {
+    if (typeof req.progress !== 'number' || 
+        req.progress < KNOWLEDGE_VALIDATION.MIN_PROGRESS ||
+        req.progress > KNOWLEDGE_VALIDATION.MAX_PROGRESS) {
+      return false;
+    }
+  }
+  
+  // relatedIssueIds is optional but must be string array if present
+  if (req.relatedIssueIds !== undefined && 
+      (!Array.isArray(req.relatedIssueIds) || 
+       !req.relatedIssueIds.every(id => typeof id === 'string'))) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Validate tag format
  */
 export function isValidTag(tag: string): boolean {
@@ -432,5 +537,6 @@ export const TYPE_PREFIXES = {
   [KnowledgeType.QUESTION]: 'QUESTION_',
   [KnowledgeType.ANSWER]: 'ANSWER_',
   [KnowledgeType.NOTE]: 'NOTE_',
-  [KnowledgeType.ISSUE]: 'ISSUE_'
+  [KnowledgeType.ISSUE]: 'ISSUE_',
+  [KnowledgeType.MILESTONE]: 'MILESTONE_'
 } as const;

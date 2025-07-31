@@ -1,9 +1,9 @@
 ---
 id: ISSUE_10
 type: issue
-status: open
+status: completed
 timestamp: '2025-07-31T06:43:23.119Z'
-lastUpdated: '2025-07-31T06:43:23.119Z'
+lastUpdated: '2025-07-31T07:04:21.818Z'
 tags:
   - enhancement
   - mcp
@@ -12,6 +12,8 @@ tags:
 title: Add get_issue MCP tool to retrieve issues by ID
 priority: medium
 ---
+
+# Add get_issue MCP tool to retrieve issues by ID
 
 # Add get_issue MCP tool to retrieve issues by ID
 
@@ -38,3 +40,17 @@ The FileKnowledgeManager already has a `getEntry(id: string)` method that can re
 5. Format and return the issue details
 
 This would make the issue management API complete with full CRUD operations.
+
+## Implementation Complete ✅
+
+The `get_issue` tool has been successfully implemented:
+
+- **Tool Definition**: Added to MCP server tools list at line 773
+- **Switch Route**: Added case for 'get_issue' at line 841  
+- **Handler Method**: Implemented `handleGetIssue` at line 2792
+- **Import**: Added `isIssue` type guard to imports
+- **Validation**: Proper argument validation and type checking
+- **Error Handling**: Comprehensive error cases with appropriate McpError codes
+- **Response Format**: Consistent with other issue handlers (summary + JSON details)
+
+The implementation follows all established patterns and integrates seamlessly with the existing MCP architecture.

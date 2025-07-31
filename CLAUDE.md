@@ -1032,7 +1032,26 @@ Creates a new issue for tracking actionable tasks and problems.
 }
 ```
 
-#### 2. list_issues
+#### 2. get_issue
+Get detailed information for a specific issue by ID.
+
+**Parameters:**
+- `issue_id` (required): The ID of the issue to retrieve
+
+**Example:**
+```json
+{
+  "issue_id": "ISSUE_123"
+}
+```
+
+**Response includes:**
+- Issue ID, title, and content
+- Current status and priority
+- Tags and metadata
+- Creation and last update timestamps
+
+#### 3. list_issues
 List issues with optional filtering by status, tags, or limit.
 
 **Parameters:**
@@ -1049,7 +1068,7 @@ List issues with optional filtering by status, tags, or limit.
 }
 ```
 
-#### 3. update_issue
+#### 4. update_issue
 Update an existing issue's title, content, status, tags, or priority.
 
 **Parameters:**
@@ -1069,7 +1088,7 @@ Update an existing issue's title, content, status, tags, or priority.
 }
 ```
 
-#### 4. delete_issue
+#### 5. delete_issue
 Delete an issue from the knowledge base.
 
 **Parameters:**
@@ -1145,6 +1164,80 @@ Issues can reference each other using the `[[ISSUE_ID]]` syntax:
 - `[[ISSUE_123]]` - Creates a link to another issue
 - Cross-references are bidirectional (both issues know about each other)
 - Useful for tracking related problems, dependencies, or follow-up tasks
+
+### Complete Issue Management Workflow
+
+The issue management system now provides full CRUD operations. Here's the typical workflow:
+
+#### 1. Check Existing Issues
+```typescript
+// List all open issues
+const openIssues = await mcp.list_issues({
+  status: "open"
+});
+
+// Search for specific issues by tags
+const bugs = await mcp.list_issues({
+  status: "open",
+  tags: ["bug", "high-priority"]
+});
+```
+
+#### 2. Create New Issue
+```typescript
+// Record a new issue
+const issue = await mcp.record_issue({
+  title: "Add authentication to WebSocket server",
+  content: "Currently the WebSocket server accepts all connections. We need to add JWT-based authentication.",
+  priority: "medium",
+  tags: ["enhancement", "security", "websocket"]
+});
+// Returns: { id: "ISSUE_123", ... }
+```
+
+#### 3. View Issue Details
+```typescript
+// Get full details of a specific issue
+const details = await mcp.get_issue({
+  issue_id: "ISSUE_123"
+});
+// Returns complete issue information including status, tags, timestamps
+```
+
+#### 4. Update Issue Progress
+```typescript
+// Mark issue as in-progress when starting work
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  status: "in-progress"
+});
+
+// Update with findings or notes
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  content: originalContent + "\n\n## Progress Update\n\nImplemented JWT validation..."
+});
+
+// Complete the issue
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  status: "completed"
+});
+```
+
+#### 5. Archive or Delete
+```typescript
+// Archive completed issues for future reference
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  status: "archived"
+});
+
+// Or delete if no longer needed
+await mcp.delete_issue({
+  issue_id: "ISSUE_123"
+});
+```
 
 ### Usage Examples
 

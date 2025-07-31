@@ -120,20 +120,26 @@ const issue = await mcp.record_issue({
   tags: ["enhancement", "security", "websocket"]
 });
 
-// 3. Update to in-progress
+// 3. Get full issue details when needed
+const issueDetails = await mcp.get_issue({
+  issue_id: issue.id
+});
+// Now you have complete issue information including status, timestamps, etc.
+
+// 4. Update to in-progress
 await mcp.update_issue({
   issue_id: issue.id,
   status: "in-progress"
 });
 
-// 4. Use appropriate agent
+// 5. Use appropriate agent
 await Task({
   description: "Implement WebSocket authentication",
   subagent_type: "plan-implementer",
   prompt: `Implement JWT authentication for WebSocket server as described in ${issue.id}...`
 });
 
-// 5. Update issue with results
+// 6. Update issue with results
 await mcp.update_issue({
   issue_id: issue.id,
   content: issue.content + "\n\n## Implementation Complete\n\nAdded JWT auth with...",
@@ -150,25 +156,38 @@ const bugs = await mcp.list_issues({
   tags: ["bug"] 
 });
 
-// 2. Start investigation
+// 2. Get full details of the issue
+const bugDetails = await mcp.get_issue({
+  issue_id: "ISSUE_123"
+});
+// Review the complete issue description, priority, and any updates
+
+// 3. Start investigation
 await mcp.update_issue({
   issue_id: "ISSUE_123",
   status: "in-progress"
 });
 
-// 3. Use debugger agent
+// 4. Use debugger agent
 await Task({
   description: "Debug memory leak",
   subagent_type: "systematic-debugger",
-  prompt: "Investigate the WebSocket memory leak described in ISSUE_123..."
+  prompt: `Investigate the WebSocket memory leak described in ISSUE_123. Full details: ${JSON.stringify(bugDetails)}`
 });
 
-// 4. Document findings
+// 5. Document findings
 await mcp.record_note({
   category: "troubleshooting",
   content: "Memory leak was caused by...",
   process_id: "related-process-id",
   tags: ["websocket", "memory", "solution"]
+});
+
+// 6. Update and close the issue
+await mcp.update_issue({
+  issue_id: "ISSUE_123",
+  content: bugDetails.content + "\n\n## Root Cause\n\nThe memory leak was caused by...\n\n## Solution\n\nFixed by adding proper cleanup...",
+  status: "completed"
 });
 ```
 
@@ -212,6 +231,7 @@ await mcp.update_issue({
 ```bash
 # Issue Management
 mcp.record_issue({ title, content, priority, tags })
+mcp.get_issue({ issue_id })
 mcp.list_issues({ status, tags, limit })
 mcp.update_issue({ issue_id, status, content, priority, tags })
 mcp.delete_issue({ issue_id })

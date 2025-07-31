@@ -13,6 +13,7 @@ import { ProcessRegistry } from './process/registry.ts';
 import { ProcessMonitoringConfig } from './process/types.ts';
 import { FileKnowledgeManager } from './knowledge/file-manager.ts';
 import { IntegratedQueueManager } from './queue/integrated-manager.ts';
+import { MilestoneManager } from './knowledge/milestone-manager.ts';
 
 /**
  * Initialize and start the MCP Process Server
@@ -61,8 +62,11 @@ async function main(): Promise<void> {
       persistPath: './queue-state.json'
     });
     
+    // Create MilestoneManager for milestone tracking
+    const milestoneManager = new MilestoneManager();
+    
     // Create MCP server with all manager dependencies
-    const mcpServer = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+    const mcpServer = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
     
     // Start the MCP server
     await mcpServer.start();

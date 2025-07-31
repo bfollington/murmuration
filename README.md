@@ -111,9 +111,11 @@ Add the process management server to your MCP client configuration:
 
 ### Available MCP Tools
 
-The server provides these MCP tools:
+The server provides comprehensive tools for process management, knowledge capture, and issue tracking:
 
-#### `start_process`
+#### Process Management Tools
+
+##### `start_process`
 Start a new background process:
 ```json
 {
@@ -124,11 +126,13 @@ Start a new background process:
     "NODE_ENV": "development",
     "PORT": "3000"
   },
-  "name": "dev-server"
+  "name": "dev-server",
+  "priority": 5,
+  "immediate": false
 }
 ```
 
-#### `stop_process`
+##### `stop_process`
 Stop a running process:
 ```json
 {
@@ -138,7 +142,7 @@ Stop a running process:
 }
 ```
 
-#### `list_processes`
+##### `list_processes`
 List and filter processes:
 ```json
 {
@@ -149,7 +153,7 @@ List and filter processes:
 }
 ```
 
-#### `get_process_logs`
+##### `get_process_logs`
 Retrieve process output:
 ```json
 {
@@ -159,11 +163,82 @@ Retrieve process output:
 }
 ```
 
-#### `get_process_status`
+##### `get_process_status`
 Get detailed status of a specific process:
 ```json
 {
   "process_id": "uuid-process-id"
+}
+```
+
+#### Issue Management Tools
+
+##### `record_issue`
+Create a new issue for tracking tasks and problems:
+```json
+{
+  "title": "Fix WebSocket memory leak",
+  "content": "WebSocket connections are not being properly cleaned up when clients disconnect.",
+  "priority": "high",
+  "tags": ["bug", "websocket", "memory"]
+}
+```
+
+##### `get_issue`
+Get detailed information for a specific issue:
+```json
+{
+  "issue_id": "ISSUE_123"
+}
+```
+
+##### `list_issues`
+List issues with optional filtering:
+```json
+{
+  "status": "open",
+  "tags": ["bug"],
+  "limit": 20
+}
+```
+
+##### `update_issue`
+Update an existing issue:
+```json
+{
+  "issue_id": "ISSUE_123",
+  "status": "in-progress",
+  "priority": "high"
+}
+```
+
+##### `delete_issue`
+Delete an issue:
+```json
+{
+  "issue_id": "ISSUE_123"
+}
+```
+
+#### Knowledge Management Tools
+
+##### `record_note`
+Create a note for documentation:
+```json
+{
+  "content": "The WebSocket memory leak was caused by missing removeEventListener calls",
+  "category": "troubleshooting",
+  "tags": ["websocket", "memory", "solution"],
+  "process_id": "uuid-process-id"
+}
+```
+
+##### `record_question` / `record_answer`
+Build a Q&A knowledge base:
+```json
+{
+  "content": "How do we handle WebSocket reconnection?",
+  "tags": ["websocket", "architecture"]
 }
 ```
 

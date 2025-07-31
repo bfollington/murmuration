@@ -19,6 +19,7 @@ export const QUESTION_ = TYPE_PREFIXES[KnowledgeType.QUESTION];
 export const ANSWER_ = TYPE_PREFIXES[KnowledgeType.ANSWER];
 export const NOTE_ = TYPE_PREFIXES[KnowledgeType.NOTE];
 export const ISSUE_ = TYPE_PREFIXES[KnowledgeType.ISSUE];
+export const MILESTONE_ = TYPE_PREFIXES[KnowledgeType.MILESTONE];
 
 /**
  * Markdown file format specification
@@ -107,6 +108,13 @@ export const ISSUE_ = TYPE_PREFIXES[KnowledgeType.ISSUE];
  * - assignee: optional string
  * - dueDate: optional ISO date string
  * - relatedIds: optional string array
+ *
+ * ### Milestone-specific
+ * - title: string (brief milestone description)
+ * - description: string (detailed explanation, stored in content)
+ * - targetDate: optional ISO date string
+ * - progress: optional number (0-100 percentage)
+ * - relatedIssueIds: string array (for linked issues via [[ISSUE_X]])
  */
 
 /**
@@ -261,5 +269,62 @@ to runtime environment variable injection.
 ## Related
 
 See [[NOTE_789]] for environment variable handling documentation.
+`,
+
+  [KnowledgeType.MILESTONE]: `---
+id: MILESTONE_1
+type: milestone
+status: open
+title: Phase 1 Implementation Complete
+targetDate: 2024-12-31T00:00:00.000Z
+progress: 25
+timestamp: 2024-01-01T16:00:00.000Z
+lastUpdated: 2024-01-01T16:00:00.000Z
+tags:
+  - milestone
+  - phase-1
+  - implementation
+relatedIssueIds:
+  - ISSUE_123
+  - ISSUE_456
+metadata:
+  owner: development-team
+  priority: high
+---
+
+# Phase 1 Implementation Complete
+
+Complete the core functionality for the MCP Process Management Server including
+process lifecycle management, registry operations, and basic monitoring capabilities.
+
+## Key Deliverables
+
+- Process spawning and monitoring system
+- Registry-based process storage 
+- MCP tool integration with 5 core tools
+- Basic logging and error handling
+- Unit test coverage for core modules
+
+## Success Criteria
+
+- All core MCP tools implemented and tested
+- Process lifecycle (start/stop/monitor) working reliably
+- Registry operations performant with 100+ processes
+- Error handling covers edge cases
+- Documentation complete for developer onboarding
+
+## Related Issues
+
+This milestone encompasses the following issues:
+- [[ISSUE_123]] - Process manager implementation
+- [[ISSUE_456]] - MCP server integration
+
+## Progress Notes
+
+- Core process management: ✅ Complete
+- Registry implementation: ✅ Complete  
+- MCP tools: 🔄 In Progress (3/5 tools complete)
+- Testing: 📋 Pending
+- Documentation: 📋 Pending
 `
 } as const;

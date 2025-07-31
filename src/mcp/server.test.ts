@@ -6,6 +6,7 @@ import { ProcessStatus } from '../shared/types.ts';
 import { ProcessMonitoringConfig } from '../process/types.ts';
 import { KnowledgeManager } from '../knowledge/manager.ts';
 import { IntegratedQueueManager } from '../queue/integrated-manager.ts';
+import { MilestoneManager } from '../knowledge/milestone-manager.ts';
 
 /**
  * Test utilities for MCP server testing
@@ -31,6 +32,7 @@ function createTestManagers(): {
   processManager: ProcessManager;
   knowledgeManager: KnowledgeManager;
   queueManager: IntegratedQueueManager;
+  milestoneManager: MilestoneManager;
 } {
   const processManager = createTestProcessManager();
   const knowledgeManager = new KnowledgeManager();
@@ -40,8 +42,9 @@ function createTestManagers(): {
     persistInterval: 0, // Don't persist in tests
     restoreOnStartup: false,
   });
+  const milestoneManager = new MilestoneManager();
   
-  return { processManager, knowledgeManager, queueManager };
+  return { processManager, knowledgeManager, queueManager, milestoneManager };
 }
 
 /**
@@ -71,8 +74,8 @@ class MockStdioTransport {
  */
 
 Deno.test('MCPProcessServer - Constructor and Basic Properties', () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Server should not be running initially
   assertEquals(server.isRunning(), false);
@@ -87,30 +90,36 @@ Deno.test('MCPProcessServer - Constructor and Basic Properties', () => {
 });
 
 Deno.test('MCPProcessServer - Constructor with null managers should throw', () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
   
   assertThrows(
-    () => new MCPProcessServer(null as any, knowledgeManager, queueManager),
+    () => new MCPProcessServer(null as any, knowledgeManager, queueManager, milestoneManager),
     Error,
     'ProcessManager is required'
   );
   
   assertThrows(
-    () => new MCPProcessServer(processManager, null as any, queueManager),
+    () => new MCPProcessServer(processManager, null as any, queueManager, milestoneManager),
     Error,
     'KnowledgeManager is required'
   );
   
   assertThrows(
-    () => new MCPProcessServer(processManager, knowledgeManager, null as any),
+    () => new MCPProcessServer(processManager, knowledgeManager, null as any, milestoneManager),
     Error,
     'IntegratedQueueManager is required'
+  );
+  
+  assertThrows(
+    () => new MCPProcessServer(processManager, knowledgeManager, queueManager, null as any),
+    Error,
+    'MilestoneManager is required'
   );
 });
 
 Deno.test('MCPProcessServer - Start Server Successfully', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     await server.start();
@@ -131,8 +140,8 @@ Deno.test('MCPProcessServer - Start Server Successfully', async () => {
 });
 
 Deno.test('MCPProcessServer - Start Already Started Server Should Throw', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Mock the server as already started
   Object.defineProperty(server, 'isStarted', {
@@ -148,8 +157,8 @@ Deno.test('MCPProcessServer - Start Already Started Server Should Throw', async 
 });
 
 Deno.test('MCPProcessServer - Stop Server Successfully', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Mock the server as started with transport
   const mockTransport = new MockStdioTransport();
@@ -170,8 +179,8 @@ Deno.test('MCPProcessServer - Stop Server Successfully', async () => {
 });
 
 Deno.test('MCPProcessServer - Stop Non-Running Server Should Not Throw', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Should not throw when stopping a non-running server
   await server.stop();
@@ -179,8 +188,8 @@ Deno.test('MCPProcessServer - Stop Non-Running Server Should Not Throw', async (
 });
 
 Deno.test('MCPProcessServer - Server Info Reflects Current State', () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const info = server.getServerInfo();
   
@@ -204,8 +213,8 @@ Deno.test('MCPProcessServer - Server Info Reflects Current State', () => {
 });
 
 Deno.test('MCPProcessServer - Server Info Updates with ProcessManager State', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Add a test process to the process manager
   const testRequest = {
@@ -243,8 +252,8 @@ Deno.test('MCPProcessServer - Server Info Updates with ProcessManager State', as
 });
 
 Deno.test('MCPProcessServer - Error Handling During Start', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     await server.start();
@@ -271,8 +280,8 @@ Deno.test('MCPProcessServer - Error Handling During Start', async () => {
 });
 
 Deno.test('MCPProcessServer - ProcessManager Integration', () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Server should have access to ProcessManager functionality through info
   const info = server.getServerInfo();
@@ -290,8 +299,8 @@ Deno.test('MCPProcessServer - ProcessManager Integration', () => {
 });
 
 Deno.test('MCPProcessServer - Shutdown ProcessManager on Stop', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Add a mock running process to test shutdown behavior
   const registry = new ProcessRegistry();
@@ -335,8 +344,8 @@ Deno.test('MCPProcessServer - Shutdown ProcessManager on Stop', async () => {
 });
 
 Deno.test('MCPProcessServer - Tool Schema Validation', () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Server should define proper tool schemas (tested indirectly through constructor)
   // The server sets up handlers for all required tools:
@@ -351,8 +360,8 @@ Deno.test('MCPProcessServer - Tool Schema Validation', () => {
 });
 
 Deno.test('MCPProcessServer - Multiple Start/Stop Cycles', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Test multiple start/stop cycles
   for (let i = 0; i < 3; i++) {
@@ -372,8 +381,8 @@ Deno.test('MCPProcessServer - Multiple Start/Stop Cycles', async () => {
 });
 
 Deno.test('MCPProcessServer - Concurrent Start Attempts', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Multiple concurrent start attempts should be handled properly
   const startPromises = [
@@ -403,8 +412,8 @@ Deno.test('MCPProcessServer - Concurrent Start Attempts', async () => {
 });
 
 Deno.test('MCPProcessServer - Error Handling in Stop', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Mock server as started with a transport that throws on close
   const mockTransport = {
@@ -441,8 +450,8 @@ Deno.test('MCPProcessServer - Error Handling in Stop', async () => {
 });
 
 Deno.test('MCPProcessServer - Resource Cleanup on Failed Start', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Test cleanup behavior
   try {
@@ -474,8 +483,8 @@ Deno.test('MCPProcessServer - Resource Cleanup on Failed Start', async () => {
  */
 
 Deno.test('MCPProcessServer - list_processes with no arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Access private method for testing
   const listProcesses = (server as any).handleListProcesses.bind(server);
@@ -491,8 +500,8 @@ Deno.test('MCPProcessServer - list_processes with no arguments', async () => {
 });
 
 Deno.test('MCPProcessServer - list_processes with empty arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const listProcesses = (server as any).handleListProcesses.bind(server);
   
@@ -505,8 +514,8 @@ Deno.test('MCPProcessServer - list_processes with empty arguments', async () => 
 });
 
 Deno.test('MCPProcessServer - list_processes with invalid status', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const listProcesses = (server as any).handleListProcesses.bind(server);
   
@@ -519,8 +528,8 @@ Deno.test('MCPProcessServer - list_processes with invalid status', async () => {
 });
 
 Deno.test('MCPProcessServer - list_processes with invalid limit', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const listProcesses = (server as any).handleListProcesses.bind(server);
   
@@ -545,8 +554,8 @@ Deno.test('MCPProcessServer - list_processes with invalid limit', async () => {
 });
 
 Deno.test('MCPProcessServer - list_processes with invalid offset', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const listProcesses = (server as any).handleListProcesses.bind(server);
   
@@ -565,8 +574,8 @@ Deno.test('MCPProcessServer - list_processes with invalid offset', async () => {
 });
 
 Deno.test('MCPProcessServer - list_processes with valid filters', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const listProcesses = (server as any).handleListProcesses.bind(server);
   
@@ -585,8 +594,8 @@ Deno.test('MCPProcessServer - list_processes with valid filters', async () => {
 });
 
 Deno.test('MCPProcessServer - get_process_status with no arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessStatus = (server as any).handleGetProcessStatus.bind(server);
   
@@ -605,8 +614,8 @@ Deno.test('MCPProcessServer - get_process_status with no arguments', async () =>
 });
 
 Deno.test('MCPProcessServer - get_process_status with invalid process_id', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessStatus = (server as any).handleGetProcessStatus.bind(server);
   
@@ -631,8 +640,8 @@ Deno.test('MCPProcessServer - get_process_status with invalid process_id', async
 });
 
 Deno.test('MCPProcessServer - get_process_status with non-existent process', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessStatus = (server as any).handleGetProcessStatus.bind(server);
   
@@ -645,8 +654,8 @@ Deno.test('MCPProcessServer - get_process_status with non-existent process', asy
 });
 
 Deno.test('MCPProcessServer - get_process_logs with no arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessLogs = (server as any).handleGetProcessLogs.bind(server);
   
@@ -665,8 +674,8 @@ Deno.test('MCPProcessServer - get_process_logs with no arguments', async () => {
 });
 
 Deno.test('MCPProcessServer - get_process_logs with invalid arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessLogs = (server as any).handleGetProcessLogs.bind(server);
   
@@ -711,8 +720,8 @@ Deno.test('MCPProcessServer - get_process_logs with invalid arguments', async ()
 });
 
 Deno.test('MCPProcessServer - get_process_logs with non-existent process', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessLogs = (server as any).handleGetProcessLogs.bind(server);
   
@@ -729,8 +738,8 @@ Deno.test('MCPProcessServer - get_process_logs with non-existent process', async
  */
 
 Deno.test('MCPProcessServer - Integration: list_processes with real process data', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     // Create a test process
@@ -791,8 +800,8 @@ Deno.test('MCPProcessServer - Integration: list_processes with real process data
 });
 
 Deno.test('MCPProcessServer - Integration: get_process_status with real process', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     // Create a test process
@@ -843,8 +852,8 @@ Deno.test('MCPProcessServer - Integration: get_process_status with real process'
 });
 
 Deno.test('MCPProcessServer - Integration: get_process_logs with real process', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     // Create a test process that produces output
@@ -903,8 +912,8 @@ Deno.test('MCPProcessServer - Integration: get_process_logs with real process', 
 });
 
 Deno.test('MCPProcessServer - MCP Protocol Compliance: Response Format', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const listProcesses = (server as any).handleListProcesses.bind(server);
   
@@ -928,8 +937,8 @@ Deno.test('MCPProcessServer - MCP Protocol Compliance: Response Format', async (
 });
 
 Deno.test('MCPProcessServer - MCP Protocol Compliance: Error Response Format', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const getProcessStatus = (server as any).handleGetProcessStatus.bind(server);
   
@@ -945,8 +954,8 @@ Deno.test('MCPProcessServer - MCP Protocol Compliance: Error Response Format', a
 });
 
 Deno.test('MCPProcessServer - Validation: Argument Type Guards', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Test validation helper methods directly
   const validateListProcesses = (server as any).validateListProcessesArgs.bind(server);
@@ -978,8 +987,8 @@ Deno.test('MCPProcessServer - Validation: Argument Type Guards', async () => {
  */
 
 Deno.test('MCPProcessServer - start_process with no arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const startProcess = (server as any).handleStartProcess.bind(server);
   
@@ -998,8 +1007,8 @@ Deno.test('MCPProcessServer - start_process with no arguments', async () => {
 });
 
 Deno.test('MCPProcessServer - start_process with invalid arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const startProcess = (server as any).handleStartProcess.bind(server);
   
@@ -1076,8 +1085,8 @@ Deno.test('MCPProcessServer - start_process with invalid arguments', async () =>
 });
 
 Deno.test('MCPProcessServer - start_process with minimal parameters', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const startProcess = (server as any).handleStartProcess.bind(server);
   
@@ -1111,8 +1120,8 @@ Deno.test('MCPProcessServer - start_process with minimal parameters', async () =
 });
 
 Deno.test('MCPProcessServer - start_process with full parameters', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const startProcess = (server as any).handleStartProcess.bind(server);
   
@@ -1152,8 +1161,8 @@ Deno.test('MCPProcessServer - start_process with full parameters', async () => {
 });
 
 Deno.test('MCPProcessServer - start_process spawn failure handling', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const startProcess = (server as any).handleStartProcess.bind(server);
   
@@ -1166,8 +1175,8 @@ Deno.test('MCPProcessServer - start_process spawn failure handling', async () =>
 });
 
 Deno.test('MCPProcessServer - stop_process with no arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const stopProcess = (server as any).handleStopProcess.bind(server);
   
@@ -1186,8 +1195,8 @@ Deno.test('MCPProcessServer - stop_process with no arguments', async () => {
 });
 
 Deno.test('MCPProcessServer - stop_process with invalid arguments', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const stopProcess = (server as any).handleStopProcess.bind(server);
   
@@ -1238,8 +1247,8 @@ Deno.test('MCPProcessServer - stop_process with invalid arguments', async () => 
 });
 
 Deno.test('MCPProcessServer - stop_process with non-existent process', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const stopProcess = (server as any).handleStopProcess.bind(server);
   
@@ -1252,8 +1261,8 @@ Deno.test('MCPProcessServer - stop_process with non-existent process', async () 
 });
 
 Deno.test('MCPProcessServer - stop_process graceful termination', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const stopProcess = (server as any).handleStopProcess.bind(server);
   
@@ -1300,8 +1309,8 @@ Deno.test('MCPProcessServer - stop_process graceful termination', async () => {
 });
 
 Deno.test('MCPProcessServer - stop_process forced termination', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const stopProcess = (server as any).handleStopProcess.bind(server);
   
@@ -1348,8 +1357,8 @@ Deno.test('MCPProcessServer - stop_process forced termination', async () => {
 });
 
 Deno.test('MCPProcessServer - stop_process already stopped process', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   const stopProcess = (server as any).handleStopProcess.bind(server);
   
@@ -1389,8 +1398,8 @@ Deno.test('MCPProcessServer - stop_process already stopped process', async () =>
 });
 
 Deno.test('MCPProcessServer - Integration: Complete process lifecycle via MCP tools', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     const startProcess = (server as any).handleStartProcess.bind(server);
@@ -1449,8 +1458,8 @@ Deno.test('MCPProcessServer - Integration: Complete process lifecycle via MCP to
 });
 
 Deno.test('MCPProcessServer - Concurrent process operations', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   try {
     const startProcess = (server as any).handleStartProcess.bind(server);
@@ -1498,8 +1507,8 @@ Deno.test('MCPProcessServer - Concurrent process operations', async () => {
 });
 
 Deno.test('MCPProcessServer - Validation: start_process and stop_process type guards', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Test validation helper methods directly
   const validateStartProcess = (server as any).validateStartProcessArgs.bind(server);
@@ -1540,8 +1549,8 @@ Deno.test('MCPProcessServer - Validation: start_process and stop_process type gu
  * Integration tests for Knowledge Management tools
  */
 Deno.test('MCPProcessServer - Knowledge Management Integration', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Test recording a question
   const questionResult = await knowledgeManager.createQuestion({
@@ -1587,8 +1596,8 @@ Deno.test('MCPProcessServer - Knowledge Management Integration', async () => {
  * Integration tests for Queue Management tools
  */
 Deno.test('MCPProcessServer - Queue Management Integration', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Add a process to the queue
   const queueId = queueManager.addToQueue({
@@ -1623,8 +1632,8 @@ Deno.test('MCPProcessServer - Queue Management Integration', async () => {
  * Integration test for process with queue and knowledge
  */
 Deno.test('MCPProcessServer - Full Integration Test', async () => {
-  const { processManager, knowledgeManager, queueManager } = createTestManagers();
-  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager);
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
   
   // Start queue processing
   queueManager.startProcessing();
