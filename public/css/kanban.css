@@ -1,0 +1,368 @@
+/**
+ * Kanban Board Styles
+ * 
+ * Styling for the issue kanban board component
+ */
+
+/* Kanban Board Container */
+.kanban-board {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: #f8fafc;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.kanban-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.kanban-header h2 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.kanban-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Columns Layout */
+.kanban-columns {
+    display: flex;
+    flex: 1;
+    gap: 16px;
+    padding: 20px;
+    overflow-x: auto;
+    min-height: 0;
+}
+
+.kanban-column {
+    flex: 1;
+    min-width: 300px;
+    max-width: 350px;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.column-header h3 {
+    margin: 0;
+    color: #374151;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.issue-count {
+    background: #6b7280;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* Column-specific styling */
+.kanban-column[data-status="open"] .column-header {
+    background: #fef3c7;
+    border-bottom-color: #f59e0b;
+}
+
+.kanban-column[data-status="open"] .issue-count {
+    background: #f59e0b;
+}
+
+.kanban-column[data-status="in-progress"] .column-header {
+    background: #dbeafe;
+    border-bottom-color: #3b82f6;
+}
+
+.kanban-column[data-status="in-progress"] .issue-count {
+    background: #3b82f6;
+}
+
+.kanban-column[data-status="completed"] .column-header {
+    background: #d1fae5;
+    border-bottom-color: #10b981;
+}
+
+.kanban-column[data-status="completed"] .issue-count {
+    background: #10b981;
+}
+
+.column-content {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    min-height: 200px;
+}
+
+/* Drop Zone */
+.drop-zone {
+    padding: 20px;
+    text-align: center;
+    color: #9ca3af;
+    font-style: italic;
+    border: 2px dashed #e5e7eb;
+    border-radius: 6px;
+    margin: 10px 0;
+    transition: all 0.2s ease;
+}
+
+.column-content.drag-active .drop-zone {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+
+.column-content.drag-over {
+    background: #eff6ff;
+}
+
+.column-content.drag-over .drop-zone {
+    border-color: #1d4ed8;
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+/* Issue Cards */
+.issue-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 12px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.issue-card:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-color: #d1d5db;
+    transform: translateY(-1px);
+}
+
+.issue-card.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg) scale(1.05);
+    cursor: grabbing;
+    z-index: 1000;
+}
+
+.issue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.issue-id {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.issue-priority {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.priority-high {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.priority-medium {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.priority-low {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.issue-title {
+    font-weight: 500;
+    color: #1f2937;
+    line-height: 1.4;
+    margin-bottom: 8px;
+    word-wrap: break-word;
+}
+
+.issue-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.issue-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.issue-card:hover .issue-actions {
+    opacity: 1;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+    background: #e5e7eb;
+}
+
+.icon {
+    font-size: 12px;
+    line-height: 1;
+}
+
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+}
+
+.notification-success {
+    background: #10b981;
+}
+
+.notification-error {
+    background: #ef4444;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .kanban-columns {
+        flex-direction: column;
+        padding: 12px;
+    }
+    
+    .kanban-column {
+        min-width: auto;
+        max-width: none;
+    }
+    
+    .kanban-header {
+        padding: 12px 16px;
+    }
+    
+    .kanban-header h2 {
+        font-size: 18px;
+    }
+    
+    .kanban-controls {
+        flex-direction: column;
+        gap: 4px;
+    }
+}

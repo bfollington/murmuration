@@ -36,3 +36,19 @@ export interface ProcessEntry {
   exitCode?: number;
   exitSignal?: string;
 }
+
+/**
+ * Extended response format for MCP tool responses that includes web UI URLs
+ */
+export interface MCPResponseContent {
+  type: 'text';
+  text: string;
+}
+
+/**
+ * MCP tool response with optional web UI URL
+ */
+export interface MCPToolResponse {
+  content: MCPResponseContent[];
+  webUrl?: string;
+}

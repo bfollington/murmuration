@@ -1,16 +1,15 @@
 ---
 id: ISSUE_14
 type: issue
-status: open
+status: completed
 timestamp: '2025-07-31T08:29:51.768Z'
-lastUpdated: '2025-07-31T08:30:30.988Z'
+lastUpdated: '2025-07-31T09:48:20.097Z'
 tags:
   - enhancement
   - web-ui
   - kanban
   - milestone
   - ui-component
-title: Create kanban board UI for issues
 priority: high
 ---
 

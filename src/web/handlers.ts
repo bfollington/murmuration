@@ -2,7 +2,7 @@ import { WebSocketConnection, WebSocketMessage } from './types.ts';
 import { ProcessManager } from '../process/manager.ts';
 import { logger } from '../shared/logger.ts';
 import { ProcessStatus } from '../shared/types.ts';
-import { ProcessQuery, ProcessSortField, SortOrder } from '../process/types.ts';
+import { ProcessQuery } from '../process/types.ts';
 
 /**
  * WebSocket message handlers for process management
@@ -34,11 +34,8 @@ export class ProcessWebSocketHandlers {
           Array.isArray(query.status) ? query.status.includes(p.status) : p.status === query.status
         );
       }
-      if (query.name) {
-        processes = processes.filter(p => p.name.includes(query.name));
-      }
-      if (query.title) {
-        processes = processes.filter(p => p.title.includes(query.title));
+      if (query.name && query.name.length > 0) {
+        processes = processes.filter(p => p.name.includes(query.name!));
       }
       
       // Apply sorting
@@ -52,16 +49,15 @@ export class ProcessWebSocketHandlers {
       }
       
       // Apply pagination
-      const page = query.page || 1;
-      const pageSize = query.pageSize || 20;
-      const start = (page - 1) * pageSize;
-      const paginatedProcesses = processes.slice(start, start + pageSize);
+      const offset = query.offset || 0;
+      const limit = query.limit || 20;
+      const paginatedProcesses = processes.slice(offset, offset + limit);
       
       const result = {
         processes: paginatedProcesses,
         total: processes.length,
-        page,
-        pageSize,
+        offset,
+        limit,
       };
       
       // Send response
@@ -70,8 +66,8 @@ export class ProcessWebSocketHandlers {
         data: {
           processes: result.processes,
           total: result.total,
-          page: result.page,
-          pageSize: result.pageSize,
+          offset: result.offset,
+          limit: result.limit,
         },
       });
     } catch (error) {
@@ -130,7 +126,7 @@ export class ProcessWebSocketHandlers {
           },
         });
       } else {
-        await this.sendError(connection, result.error?.message || 'Failed to start process');
+        await this.sendError(connection, result.error || 'Failed to start process');
       }
     } catch (error) {
       logger.error('ProcessWebSocketHandlers', 'Error handling start_process', error);
@@ -228,10 +224,6 @@ export class ProcessWebSocketHandlers {
     if (obj.status) {
       if (typeof obj.status === 'string' && Object.values(ProcessStatus).includes(obj.status as ProcessStatus)) {
         query.status = obj.status as ProcessStatus;
-      } else if (Array.isArray(obj.status)) {
-        query.status = obj.status.filter(s => 
-          typeof s === 'string' && Object.values(ProcessStatus).includes(s as ProcessStatus)
-        ) as ProcessStatus[];
       }
     }
 
@@ -240,25 +232,21 @@ export class ProcessWebSocketHandlers {
       query.name = obj.name;
     }
 
-    // Parse title filter
-    if (typeof obj.title === 'string') {
-      query.title = obj.title;
-    }
 
     // Parse sorting
     if (typeof obj.sortBy === 'string' && ['startTime', 'name', 'status'].includes(obj.sortBy)) {
-      query.sortBy = obj.sortBy as ProcessSortField;
+      query.sortBy = obj.sortBy as ProcessQuery['sortBy'];
     }
     if (typeof obj.sortOrder === 'string' && ['asc', 'desc'].includes(obj.sortOrder)) {
-      query.sortOrder = obj.sortOrder as SortOrder;
+      query.sortOrder = obj.sortOrder as ProcessQuery['sortOrder'];
     }
 
     // Parse pagination
-    if (typeof obj.page === 'number' && obj.page > 0) {
-      query.page = obj.page;
+    if (typeof obj.limit === 'number' && obj.limit > 0) {
+      query.limit = Math.min(obj.limit, 100); // Cap at 100
     }
-    if (typeof obj.pageSize === 'number' && obj.pageSize > 0) {
-      query.pageSize = Math.min(obj.pageSize, 100); // Cap at 100
+    if (typeof obj.offset === 'number' && obj.offset >= 0) {
+      query.offset = obj.offset;
     }
 
     return query;

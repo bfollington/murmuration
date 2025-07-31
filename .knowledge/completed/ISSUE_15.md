@@ -1,16 +1,15 @@
 ---
 id: ISSUE_15
 type: issue
-status: open
+status: completed
 timestamp: '2025-07-31T08:30:09.802Z'
-lastUpdated: '2025-07-31T08:30:09.802Z'
+lastUpdated: '2025-07-31T09:43:56.766Z'
 tags:
   - enhancement
   - web-ui
   - file-based
   - integration
   - milestone
-title: Connect web UI to file-based issue system
 priority: high
 ---
 

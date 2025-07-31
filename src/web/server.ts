@@ -1,6 +1,7 @@
 import { logger } from '../shared/logger.ts';
 import { WebSocketConnection, WebSocketState, ConnectionManager, WebSocketMessage, WebSocketError, isWebSocketMessage } from './types.ts';
 import { DefaultConnectionManager } from './connection-manager.ts';
+import { join, extname } from "https://deno.land/std@0.224.0/path/mod.ts";
 
 /**
  * Configuration options for the WebSocket server
@@ -33,16 +34,30 @@ const DEFAULT_CONFIG: Required<WebSocketServerConfig> = {
 };
 
 /**
+ * MIME types for static file serving
+ */
+const MIME_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
+
+/**
  * WebSocket server that accepts connections and manages their lifecycle
  * 
  * This server provides:
  * - HTTP server with WebSocket upgrade handling
+ * - Static file serving from public directory
  * - Connection lifecycle management
  * - Graceful shutdown
  * - Configuration options
- * 
- * Note: This implementation focuses on connection handling only.
- * Message processing will be added in later phases.
  */
 export class WebSocketServer {
   private readonly config: Required<WebSocketServerConfig>;
@@ -78,7 +93,7 @@ export class WebSocketServer {
         port: this.config.port,
         hostname: this.config.hostname,
         signal: this.abortController.signal,
-        handler: (req) => this.handleRequest(req),
+        handler: async (req) => await this.handleRequest(req),
         onListen: ({ hostname, port }) => {
           logger.log('WebSocketServer', `Server listening on ${hostname}:${port}`);
         },
@@ -94,7 +109,7 @@ export class WebSocketServer {
    * @param req The incoming request
    * @returns Response
    */
-  private handleRequest(req: Request): Response {
+  private async handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     
     // Handle WebSocket upgrade requests
@@ -114,8 +129,55 @@ export class WebSocketServer {
       });
     }
 
-    // Default 404 response
-    return new Response('Not Found', { status: 404 });
+    // Handle static file requests
+    return await this.handleStaticFile(url.pathname);
+  }
+
+  /**
+   * Handle static file requests
+   * @param pathname The requested path
+   * @returns Response with file content or 404
+   */
+  private async handleStaticFile(pathname: string): Promise<Response> {
+    try {
+      // Default to index.html for root path
+      let filePath = pathname === '/' ? '/index.html' : pathname;
+      
+      // Security: prevent directory traversal
+      if (filePath.includes('..')) {
+        return new Response('Forbidden', { status: 403 });
+      }
+      
+      // Build absolute path to file in public directory
+      const publicDir = join(Deno.cwd(), 'public');
+      const absolutePath = join(publicDir, filePath);
+      
+      // Check if file exists and read it
+      const fileInfo = await Deno.stat(absolutePath).catch(() => null);
+      if (!fileInfo || !fileInfo.isFile) {
+        return new Response('Not Found', { status: 404 });
+      }
+      
+      const fileContent = await Deno.readFile(absolutePath);
+      
+      // Determine MIME type
+      const ext = extname(filePath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      
+      logger.debug('WebSocketServer', `Serving static file: ${filePath} (${contentType})`);
+      
+      return new Response(fileContent, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': fileContent.length.toString(),
+          'Cache-Control': 'no-cache', // Disable caching during development
+        },
+      });
+    } catch (error) {
+      logger.error('WebSocketServer', `Error serving static file ${pathname}`, error);
+      return new Response('Internal Server Error', { status: 500 });
+    }
   }
 
   /**
@@ -175,19 +237,11 @@ export class WebSocketServer {
     // Store the connection
     this.connections.set(connectionId, socket);
     
-    // Create connection object and add to manager
-    const connection: WebSocketConnection = {
-      id: connectionId,
-      socket,
-      state: WebSocketState.OPEN,
-      connectedAt: new Date(),
-      metadata: {
-        userAgent: 'unknown', // Could be extracted from upgrade request headers
-        remoteAddress: 'unknown', // Could be extracted from request
-      },
-    };
-    
-    this.connectionManager.addConnection(connection);
+    // Add connection to manager (it will create the WebSocketConnection object)
+    const sessionId = this.connectionManager.addConnection(socket, {
+      userAgent: 'unknown', // Could be extracted from upgrade request headers
+      remoteAddress: 'unknown', // Could be extracted from request
+    });
     
     // Log connection details
     logger.log('WebSocketServer', `Active connections: ${this.connections.size}/${this.config.maxConnections}`);
@@ -197,6 +251,7 @@ export class WebSocketServer {
       type: 'connected',
       data: {
         connectionId,
+        sessionId,
         serverTime: new Date().toISOString(),
       },
     });
@@ -231,7 +286,6 @@ export class WebSocketServer {
     const connection = this.connectionManager.getConnection(connectionId);
     if (connection) {
       connection.state = WebSocketState.ERROR;
-      connection.lastError = new Error(errorMessage);
     }
     
     // The connection will be closed automatically after an error
@@ -339,12 +393,12 @@ export class WebSocketServer {
    * @param message Message to broadcast
    */
   public broadcast(message: WebSocketMessage): void {
-    const connections = this.connectionManager.getAllConnections();
+    const connections = this.connectionManager.getConnections();
     logger.debug('WebSocketServer', `Broadcasting message type '${message.type}' to ${connections.length} connections`);
     
     for (const connection of connections) {
-      if (connection.state === WebSocketState.OPEN) {
-        this.sendMessage(connection.id, message);
+      if (connection.state === WebSocketState.CONNECTED) {
+        this.sendMessage(connection.sessionId, message);
       }
     }
   }

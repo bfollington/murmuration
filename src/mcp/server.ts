@@ -26,6 +26,13 @@ import {
 import { MilestoneManager } from '../knowledge/milestone-manager.ts';
 import { CreateMilestoneRequest, isValidCreateMilestoneRequest } from '../knowledge/types.ts';
 import { QueuedProcess, QueuePriority } from '../queue/types.ts';
+import { 
+  getProcessUrl, 
+  getIssueUrl, 
+  getNoteUrl, 
+  getDashboardUrl 
+} from '../shared/url-utils.ts';
+import { MCPToolResponse, MCPResponseContent } from '../shared/types.ts';
 
 /**
  * MCPProcessServer - Model Context Protocol server for process management
@@ -88,6 +95,46 @@ export class MCPProcessServer {
     );
 
     this.setupServerHandlers();
+  }
+
+  /**
+   * Create a structured MCP tool response with optional web UI URL
+   * @param text Main response text
+   * @param data Optional JSON data to include
+   * @param webUrl Optional web UI URL
+   * @returns Formatted CallToolResult
+   * @private
+   */
+  private createMCPResponse(
+    text: string, 
+    data?: Record<string, unknown>, 
+    webUrl?: string
+  ): CallToolResult {
+    const content: MCPResponseContent[] = [
+      {
+        type: 'text',
+        text: text,
+      },
+    ];
+
+    // Add JSON data if provided
+    if (data) {
+      content.push({
+        type: 'text',
+        text: JSON.stringify(data, null, 2),
+      });
+    }
+
+    const response: MCPToolResponse = {
+      content,
+    };
+
+    // Add web URL if provided
+    if (webUrl) {
+      response.webUrl = webUrl;
+    }
+
+    return response as CallToolResult;
   }
 
   /**
@@ -963,18 +1010,11 @@ export class MCPProcessServer {
           executionMode: 'immediate'
         };
         
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Process '${result.process!.title}' started immediately with ID: ${result.processId}`,
-            },
-            {
-              type: 'text',
-              text: JSON.stringify(processInfo, null, 2),
-            },
-          ],
-        };
+        return this.createMCPResponse(
+          `Process '${result.process!.title}' started immediately with ID: ${result.processId}`,
+          processInfo,
+          getProcessUrl(result.processId!)
+        );
       } else {
         // Add to queue
         const queuedProcess: QueuedProcess = {
@@ -1006,18 +1046,11 @@ export class MCPProcessServer {
           executionMode: 'queued'
         };
         
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Process '${request.title}' added to queue with ID: ${queueId} (position ${position} of ${pendingEntries.length})`,
-            },
-            {
-              type: 'text',
-              text: JSON.stringify(queueInfo, null, 2),
-            },
-          ],
-        };
+        return this.createMCPResponse(
+          `Process '${request.title}' added to queue with ID: ${queueId} (position ${position} of ${pendingEntries.length})`,
+          queueInfo,
+          getProcessUrl(queueId)
+        );
       }
     } catch (error) {
       this.logServerError(`start_process error: ${error}`);
@@ -1673,26 +1706,19 @@ export class MCPProcessServer {
       
       const note = result.data!;
       
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Note recorded successfully with ID: ${note.id}`,
-          },
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: note.id,
-              content: note.content,
-              category: note.category,
-              tags: note.tags,
-              processId: note.processId,
-              relatedIds: note.relatedIds,
-              timestamp: note.timestamp.toISOString()
-            }, null, 2),
-          },
-        ],
-      };
+      return this.createMCPResponse(
+        `Note recorded successfully with ID: ${note.id}`,
+        {
+          id: note.id,
+          content: note.content,
+          category: note.category,
+          tags: note.tags,
+          processId: note.processId,
+          relatedIds: note.relatedIds,
+          timestamp: note.timestamp.toISOString()
+        },
+        getNoteUrl(note.id)
+      );
     } catch (error) {
       this.logServerError(`record_note error: ${error}`);
       
@@ -2117,23 +2143,16 @@ export class MCPProcessServer {
       // Get current queue state
       const stats = this.queueManager.getStatistics();
       
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Queue processing paused successfully`,
-          },
-          {
-            type: 'text',
-            text: JSON.stringify({
-              status: 'paused',
-              pendingCount: stats.totalQueued - stats.processing - stats.completed - stats.failed - stats.cancelled,
-              processingCount: stats.processing,
-              message: 'Running processes will continue, but no new processes will start'
-            }, null, 2),
-          },
-        ],
-      };
+      return this.createMCPResponse(
+        `Queue processing paused successfully`,
+        {
+          status: 'paused',
+          pendingCount: stats.totalQueued - stats.processing - stats.completed - stats.failed - stats.cancelled,
+          processingCount: stats.processing,
+          message: 'Running processes will continue, but no new processes will start'
+        },
+        getDashboardUrl()
+      );
     } catch (error) {
       this.logServerError(`pause_queue error: ${error}`);
       
@@ -2163,23 +2182,16 @@ export class MCPProcessServer {
       // Get current queue state
       const stats = this.queueManager.getStatistics();
       
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Queue processing resumed successfully`,
-          },
-          {
-            type: 'text',
-            text: JSON.stringify({
-              status: 'resumed',
-              pendingCount: stats.totalQueued - stats.processing - stats.completed - stats.failed - stats.cancelled,
-              processingCount: stats.processing,
-              message: 'Queue processing will continue from where it left off'
-            }, null, 2),
-          },
-        ],
-      };
+      return this.createMCPResponse(
+        `Queue processing resumed successfully`,
+        {
+          status: 'resumed',
+          pendingCount: stats.totalQueued - stats.processing - stats.completed - stats.failed - stats.cancelled,
+          processingCount: stats.processing,
+          message: 'Queue processing will continue from where it left off'
+        },
+        getDashboardUrl()
+      );
     } catch (error) {
       this.logServerError(`resume_queue error: ${error}`);
       
@@ -2529,26 +2541,19 @@ export class MCPProcessServer {
       
       const issue = result.data!;
       
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Issue recorded successfully with ID: ${issue.id}`,
-          },
-          {
-            type: 'text',
-            text: JSON.stringify({
-              id: issue.id,
-              title: params.title,
-              content: params.content,
-              priority: issue.priority,
-              status: issue.status,
-              tags: issue.tags,
-              timestamp: issue.timestamp.toISOString()
-            }, null, 2),
-          },
-        ],
-      };
+      return this.createMCPResponse(
+        `Issue recorded successfully with ID: ${issue.id}`,
+        {
+          id: issue.id,
+          title: params.title,
+          content: params.content,
+          priority: issue.priority,
+          status: issue.status,
+          tags: issue.tags,
+          timestamp: issue.timestamp.toISOString()
+        },
+        getIssueUrl(issue.id)
+      );
     } catch (error) {
       this.logServerError(`record_issue error: ${error}`);
       

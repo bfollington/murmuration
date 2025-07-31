@@ -1,15 +1,14 @@
 ---
 id: ISSUE_12
 type: issue
-status: open
+status: completed
 timestamp: '2025-07-31T08:28:21.749Z'
-lastUpdated: '2025-07-31T08:28:21.749Z'
+lastUpdated: '2025-07-31T09:13:04.113Z'
 tags:
   - enhancement
   - mcp-tools
   - web-ui
   - milestone
-title: Add URL generation to MCP tool responses
 priority: high
 ---
 

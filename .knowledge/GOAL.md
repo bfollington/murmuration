@@ -3,11 +3,11 @@ id: MILESTONE_1
 type: milestone
 status: open
 timestamp: '2025-07-31T07:26:16.579Z'
-lastUpdated: '2025-07-31T08:32:25.558Z'
+lastUpdated: '2025-07-31T09:50:25.834Z'
 tags: []
 title: Web UI HUD with URL returns from MCP tools
 targetDate: '2025-02-15T00:00:00.000Z'
-progress: 0
+progress: 66
 relatedIssueIds:
   - ISSUE_3
   - ISSUE_12
