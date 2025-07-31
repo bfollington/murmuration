@@ -1,0 +1,56 @@
+---
+id: ISSUE_9
+type: issue
+status: open
+timestamp: '2025-07-31T06:36:53.004Z'
+lastUpdated: '2025-07-31T06:36:53.004Z'
+tags:
+  - enhancement
+  - knowledge-management
+  - mcp-tool
+  - persistence
+title: Add persistent milestone tracking with MCP tool
+priority: high
+---
+
+# Add persistent milestone tracking with MCP tool
+
+## Overview
+Implement a system to capture and track the next "milestone" or "north star" for the project. This milestone should be:
+1. Persisted to the filesystem between sessions
+2. Exposed via an MCP tool for easy access and updates
+3. Support changing/updating the milestone as project progresses
+
+## Requirements
+
+### Persistence
+- Store milestone data in a structured format (JSON or markdown)
+- Location: `.knowledge/GOAL.md or similar
+- Include fields like:
+  - title: Brief milestone description
+  - description: Detailed explanation
+  - targetDate: Optional target completion date
+  - status: Current status (planned, in-progress, completed)
+  - createdAt: Timestamp
+  - updatedAt: Timestamp
+
+### MCP Tools
+Create new MCP tools:
+1. `get_milestone` - Retrieve current milestone
+2. `set_milestone` - Set or update the milestone
+
+### Integration
+- Milestone should be visible in web dashboard, we'll need to do [[ISSUE_3]] as well
+- Suggest updating milestone after reaching it
+- Allow linking issues to the current milestone via [[ISSUE_X]] syntax
+
+## Benefits
+- Clear project direction visible to all agents/sessions
+- Progress tracking towards specific goals
+- Historical record of project evolution
+- Better coordination between different work sessions
+
+## Implementation Notes
+- Should integrate with existing knowledge management system
+- Consider relationship between milestones and issues (issues can contribute to milestone completion)
+- Simple API that other tools/agents can query
