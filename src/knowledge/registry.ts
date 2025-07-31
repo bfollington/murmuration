@@ -283,7 +283,8 @@ export class KnowledgeRegistry {
       byType: {
         questions: 0,
         answers: 0,
-        notes: 0
+        notes: 0,
+        issues: 0
       },
       byStatus: {
         answeredQuestions: 0,
@@ -322,6 +323,9 @@ export class KnowledgeRegistry {
           break;
         case KnowledgeType.NOTE:
           stats.byType.notes++;
+          break;
+        case KnowledgeType.ISSUE:
+          stats.byType.issues++;
           break;
       }
 

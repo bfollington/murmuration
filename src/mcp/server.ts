@@ -11,13 +11,16 @@ import { ProcessManager } from '../process/manager.ts';
 import { StartProcessRequest, isValidStartProcessRequest } from '../process/types.ts';
 import { logger } from '../shared/logger.ts';
 import { KnowledgeManager } from '../knowledge/manager.ts';
+import { FileKnowledgeManager } from '../knowledge/file-manager.ts';
 import { IntegratedQueueManager } from '../queue/integrated-manager.ts';
 import { 
   CreateQuestionRequest, 
   CreateNoteRequest,
+  CreateIssueRequest,
   UpdateKnowledgeRequest,
   KnowledgeQuery,
-  KnowledgeType
+  KnowledgeType,
+  EntryStatus
 } from '../knowledge/types.ts';
 import { QueuedProcess, QueuePriority } from '../queue/types.ts';
 
@@ -30,7 +33,7 @@ import { QueuedProcess, QueuePriority } from '../queue/types.ts';
 export class MCPProcessServer {
   private readonly server: Server;
   private readonly processManager: ProcessManager;
-  private readonly knowledgeManager: KnowledgeManager;
+  private readonly knowledgeManager: KnowledgeManager | FileKnowledgeManager;
   private readonly queueManager: IntegratedQueueManager;
   private transport: StdioServerTransport | null = null;
   private isStarted = false;
@@ -39,12 +42,12 @@ export class MCPProcessServer {
   /**
    * Initialize MCP server with dependency injection for all managers
    * @param processManager - ProcessManager instance for direct process operations
-   * @param knowledgeManager - KnowledgeManager instance for Q&A and notes
+   * @param knowledgeManager - KnowledgeManager or FileKnowledgeManager instance for Q&A, notes, and issues
    * @param queueManager - IntegratedQueueManager instance for queued process operations
    */
   constructor(
     processManager: ProcessManager,
-    knowledgeManager: KnowledgeManager,
+    knowledgeManager: KnowledgeManager | FileKnowledgeManager,
     queueManager: IntegratedQueueManager
   ) {
     if (!processManager) {
@@ -656,6 +659,115 @@ export class MCPProcessServer {
               required: ['queue_id'],
             },
           },
+          {
+            name: 'record_issue',
+            description: 'Record a new issue for tracking actionable tasks and problems.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                title: {
+                  type: 'string',
+                  description: 'The issue title/summary',
+                  minLength: 1,
+                },
+                content: {
+                  type: 'string',
+                  description: 'The detailed issue description',
+                  minLength: 1,
+                },
+                tags: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Tags for categorizing the issue',
+                },
+                priority: {
+                  type: 'string',
+                  enum: ['low', 'medium', 'high'],
+                  description: 'Priority level of the issue',
+                  default: 'medium',
+                },
+              },
+              required: ['title', 'content'],
+            },
+          },
+          {
+            name: 'list_issues',
+            description: 'List issues with optional filtering by status, tags, or limit.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                status: {
+                  type: 'string',
+                  enum: ['open', 'in-progress', 'completed', 'archived'],
+                  description: 'Filter by issue status',
+                },
+                tags: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Filter by tags (issues must have all specified tags)',
+                },
+                limit: {
+                  type: 'number',
+                  minimum: 1,
+                  maximum: 100,
+                  description: 'Maximum number of issues to return',
+                  default: 20,
+                },
+              },
+              required: [],
+            },
+          },
+          {
+            name: 'update_issue',
+            description: 'Update an existing issue\'s title, content, status, tags, or priority.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                issue_id: {
+                  type: 'string',
+                  description: 'The ID of the issue to update',
+                },
+                title: {
+                  type: 'string',
+                  description: 'New title for the issue',
+                },
+                content: {
+                  type: 'string',
+                  description: 'New content for the issue',
+                },
+                status: {
+                  type: 'string',
+                  enum: ['open', 'in-progress', 'completed', 'archived'],
+                  description: 'New status for the issue',
+                },
+                tags: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'New tags for the issue (replaces existing tags)',
+                },
+                priority: {
+                  type: 'string',
+                  enum: ['low', 'medium', 'high'],
+                  description: 'New priority for the issue',
+                },
+              },
+              required: ['issue_id'],
+            },
+          },
+          {
+            name: 'delete_issue',
+            description: 'Delete an issue from the knowledge base.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                issue_id: {
+                  type: 'string',
+                  description: 'The ID of the issue to delete',
+                },
+              },
+              required: ['issue_id'],
+            },
+          },
         ],
       };
     });
@@ -703,6 +815,14 @@ export class MCPProcessServer {
             return await this.handleResumeQueue(args);
           case 'cancel_queued_process':
             return await this.handleCancelQueuedProcess(args);
+          case 'record_issue':
+            return await this.handleRecordIssue(args);
+          case 'list_issues':
+            return await this.handleListIssues(args);
+          case 'update_issue':
+            return await this.handleUpdateIssue(args);
+          case 'delete_issue':
+            return await this.handleDeleteIssue(args);
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -1372,7 +1492,7 @@ export class MCPProcessServer {
       }
       
       // Search entries using KnowledgeManager
-      const entries = this.knowledgeManager.searchEntries(query);
+      const entries = await this.knowledgeManager.searchEntries(query);
       
       // Format entries for display
       const formattedEntries = entries.map(entry => {
@@ -1407,7 +1527,7 @@ export class MCPProcessServer {
       });
       
       // Get statistics
-      const stats = this.knowledgeManager.getStatistics();
+      const stats = await this.knowledgeManager.getStatistics();
       
       return {
         content: [
@@ -1545,7 +1665,7 @@ export class MCPProcessServer {
       }
       
       // Search notes using KnowledgeManager
-      const entries = this.knowledgeManager.searchEntries(query);
+      const entries = await this.knowledgeManager.searchEntries(query);
       
       // Format notes for display
       const formattedNotes = entries.map(entry => {
@@ -2289,6 +2409,366 @@ export class MCPProcessServer {
     }
     
     return result;
+  }
+
+  /**
+   * Handle record_issue tool calls
+   * @param args - Tool arguments
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleRecordIssue(args: unknown): Promise<CallToolResult> {
+    try {
+      // Validate arguments
+      if (!args || typeof args !== 'object') {
+        throw new McpError(ErrorCode.InvalidRequest, 'record_issue requires arguments');
+      }
+      
+      const params = args as Record<string, unknown>;
+      
+      if (!params.title || typeof params.title !== 'string' || params.title.trim().length === 0) {
+        throw new McpError(ErrorCode.InvalidRequest, 'title is required and must be a non-empty string');
+      }
+      
+      if (!params.content || typeof params.content !== 'string' || params.content.trim().length === 0) {
+        throw new McpError(ErrorCode.InvalidRequest, 'content is required and must be a non-empty string');
+      }
+      
+      // Create issue request (using content as the main content, title in metadata)
+      const request: CreateIssueRequest = {
+        content: `# ${params.title}\n\n${params.content}`,
+        priority: (params.priority as 'low' | 'medium' | 'high') || 'medium',
+        tags: params.tags as string[] | undefined,
+        metadata: {
+          title: params.title,
+          ...((params.metadata as Record<string, unknown>) || {})
+        },
+      };
+      
+      // Create issue using FileKnowledgeManager
+      const result = await (this.knowledgeManager as FileKnowledgeManager).createIssue(request);
+      
+      if (!result.success) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Failed to create issue: ${result.error}`
+        );
+      }
+      
+      const issue = result.data!;
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Issue recorded successfully with ID: ${issue.id}`,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify({
+              id: issue.id,
+              title: params.title,
+              content: params.content,
+              priority: issue.priority,
+              status: issue.status,
+              tags: issue.tags,
+              timestamp: issue.timestamp.toISOString()
+            }, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`record_issue error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during issue creation';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to record issue: ${errorMessage}`
+      );
+    }
+  }
+
+  /**
+   * Handle list_issues tool calls
+   * @param args - Tool arguments
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleListIssues(args: unknown): Promise<CallToolResult> {
+    try {
+      // Build query for issues
+      const query: KnowledgeQuery = { type: KnowledgeType.ISSUE };
+      
+      if (args && typeof args === 'object') {
+        const params = args as Record<string, unknown>;
+        
+        if (params.status) {
+          // Map string status to EntryStatus enum
+          const statusMap: Record<string, EntryStatus> = {
+            'open': EntryStatus.OPEN,
+            'in-progress': EntryStatus.IN_PROGRESS,
+            'completed': EntryStatus.COMPLETED,
+            'archived': EntryStatus.ARCHIVED
+          };
+          
+          const status = statusMap[params.status as string];
+          if (!status) {
+            throw new McpError(ErrorCode.InvalidRequest, `Invalid status '${params.status}'. Must be one of: open, in-progress, completed, archived`);
+          }
+          // Note: The search doesn't directly support status filtering yet, we'll filter after
+        }
+        
+        if (params.tags && Array.isArray(params.tags)) {
+          query.tags = params.tags as string[];
+        }
+        if (params.limit && typeof params.limit === 'number') {
+          query.limit = params.limit;
+        }
+      }
+      
+      // Search issues using FileKnowledgeManager
+      const entries = await (this.knowledgeManager as FileKnowledgeManager).searchEntries(query);
+      
+      // Apply status filtering if specified (since query doesn't support it yet)
+      let filteredEntries = entries;
+      if (args && typeof args === 'object') {
+        const params = args as Record<string, unknown>;
+        if (params.status) {
+          const statusMap: Record<string, EntryStatus> = {
+            'open': EntryStatus.OPEN,
+            'in-progress': EntryStatus.IN_PROGRESS,
+            'completed': EntryStatus.COMPLETED,
+            'archived': EntryStatus.ARCHIVED
+          };
+          const targetStatus = statusMap[params.status as string];
+          filteredEntries = entries.filter(entry => entry.status === targetStatus);
+        }
+      }
+      
+      // Format issues for display
+      const formattedIssues = filteredEntries.map(entry => {
+        const issue = entry as any; // We know it's an Issue
+        // Extract title from metadata or content
+        const title = issue.metadata?.title || issue.content.split('\n')[0].replace(/^# /, '') || 'Untitled Issue';
+        const content = issue.metadata?.title ? issue.content.replace(/^# .*\n\n/, '') : issue.content;
+        
+        return {
+          id: issue.id,
+          title,
+          content,
+          priority: issue.priority,
+          status: issue.status,
+          tags: issue.tags,
+          assignee: issue.assignee,
+          dueDate: issue.dueDate?.toISOString(),
+          timestamp: issue.timestamp.toISOString(),
+          lastUpdated: issue.lastUpdated.toISOString()
+        };
+      });
+      
+      const statusFilter = args && typeof args === 'object' ? (args as any).status : null;
+      const statusText = statusFilter ? ` with status '${statusFilter}'` : '';
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Found ${filteredEntries.length} issue(s)${statusText}`,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify(formattedIssues, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`list_issues error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during listing';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to list issues: ${errorMessage}`
+      );
+    }
+  }
+
+  /**
+   * Handle update_issue tool calls
+   * @param args - Tool arguments
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleUpdateIssue(args: unknown): Promise<CallToolResult> {
+    try {
+      // Validate arguments
+      if (!args || typeof args !== 'object') {
+        throw new McpError(ErrorCode.InvalidRequest, 'update_issue requires arguments');
+      }
+      
+      const params = args as Record<string, unknown>;
+      
+      if (!params.issue_id || typeof params.issue_id !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'issue_id is required and must be a string');
+      }
+      
+      // Build update request
+      const updates: UpdateKnowledgeRequest = {};
+      
+      // Handle title and content updates
+      if (params.title !== undefined || params.content !== undefined) {
+        // Get current issue to merge title/content properly
+        const currentIssue = await (this.knowledgeManager as FileKnowledgeManager).getEntry(params.issue_id);
+        if (!currentIssue) {
+          throw new McpError(ErrorCode.InvalidRequest, `Issue with ID ${params.issue_id} not found`);
+        }
+        
+        const currentTitle = currentIssue.metadata?.title || currentIssue.content.split('\n')[0].replace(/^# /, '') || 'Untitled Issue';
+        const currentContent = currentIssue.metadata?.title ? currentIssue.content.replace(/^# .*\n\n/, '') : currentIssue.content;
+        
+        const newTitle = params.title !== undefined ? params.title as string : currentTitle;
+        const newContent = params.content !== undefined ? params.content as string : currentContent;
+        
+        updates.content = `# ${newTitle}\n\n${newContent}`;
+        updates.metadata = { 
+          ...currentIssue.metadata, 
+          title: newTitle 
+        };
+      }
+      
+      if (params.status !== undefined) {
+        const statusMap: Record<string, EntryStatus> = {
+          'open': EntryStatus.OPEN,
+          'in-progress': EntryStatus.IN_PROGRESS,
+          'completed': EntryStatus.COMPLETED,
+          'archived': EntryStatus.ARCHIVED
+        };
+        
+        const status = statusMap[params.status as string];
+        if (!status) {
+          throw new McpError(ErrorCode.InvalidRequest, `Invalid status '${params.status}'. Must be one of: open, in-progress, completed, archived`);
+        }
+        updates.status = status;
+      }
+      
+      if (params.tags !== undefined) {
+        if (!Array.isArray(params.tags)) {
+          throw new McpError(ErrorCode.InvalidRequest, 'tags must be an array of strings');
+        }
+        updates.tags = params.tags as string[];
+      }
+      
+      if (params.priority !== undefined) {
+        if (!['low', 'medium', 'high'].includes(params.priority as string)) {
+          throw new McpError(ErrorCode.InvalidRequest, 'priority must be low, medium, or high');
+        }
+        updates.priority = params.priority as 'low' | 'medium' | 'high';
+      }
+      
+      // Update issue using FileKnowledgeManager
+      const result = await (this.knowledgeManager as FileKnowledgeManager).updateEntry(params.issue_id, updates);
+      
+      if (!result.success) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Failed to update issue: ${result.error}`
+        );
+      }
+      
+      const issue = result.data!;
+      const title = issue.metadata?.title || issue.content.split('\n')[0].replace(/^# /, '') || 'Untitled Issue';
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Issue ${params.issue_id} updated successfully`,
+          },
+          {
+            type: 'text',
+            text: JSON.stringify({
+              id: issue.id,
+              title,
+              priority: (issue as any).priority,
+              status: issue.status,
+              tags: issue.tags,
+              lastUpdated: issue.lastUpdated.toISOString()
+            }, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`update_issue error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during update';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to update issue: ${errorMessage}`
+      );
+    }
+  }
+
+  /**
+   * Handle delete_issue tool calls
+   * @param args - Tool arguments
+   * @returns CallToolResult
+   * @private
+   */
+  private async handleDeleteIssue(args: unknown): Promise<CallToolResult> {
+    try {
+      // Validate arguments
+      if (!args || typeof args !== 'object') {
+        throw new McpError(ErrorCode.InvalidRequest, 'delete_issue requires arguments');
+      }
+      
+      const params = args as Record<string, unknown>;
+      
+      if (!params.issue_id || typeof params.issue_id !== 'string') {
+        throw new McpError(ErrorCode.InvalidRequest, 'issue_id is required and must be a string');
+      }
+      
+      // Delete issue using FileKnowledgeManager
+      const result = await (this.knowledgeManager as FileKnowledgeManager).deleteEntry(params.issue_id);
+      
+      if (!result.success) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Failed to delete issue: ${result.error}`
+        );
+      }
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Issue ${params.issue_id} deleted successfully`,
+          },
+        ],
+      };
+    } catch (error) {
+      this.logServerError(`delete_issue error: ${error}`);
+      
+      if (error instanceof McpError) {
+        throw error;
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during deletion';
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to delete issue: ${errorMessage}`
+      );
+    }
   }
 
   /**

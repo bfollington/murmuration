@@ -8,7 +8,18 @@
 export enum KnowledgeType {
   QUESTION = 'question',
   ANSWER = 'answer',
-  NOTE = 'note'
+  NOTE = 'note',
+  ISSUE = 'issue'
+}
+
+/**
+ * Entry status for file-based backend
+ */
+export enum EntryStatus {
+  OPEN = 'open',
+  IN_PROGRESS = 'in-progress',
+  COMPLETED = 'completed',
+  ARCHIVED = 'archived'
 }
 
 /**
@@ -21,6 +32,7 @@ export interface KnowledgeEntry {
   timestamp: Date;
   lastUpdated: Date;
   tags: string[];
+  status: EntryStatus;
   processId?: string; // Link to related process if applicable
   metadata: Record<string, unknown>;
 }
@@ -51,6 +63,17 @@ export interface Answer extends KnowledgeEntry {
 export interface Note extends KnowledgeEntry {
   type: KnowledgeType.NOTE;
   category?: string; // e.g., 'observation', 'todo', 'idea'
+  relatedIds?: string[]; // IDs of related knowledge entries
+}
+
+/**
+ * Issue entry for tracking actionable tasks and problems
+ */
+export interface Issue extends KnowledgeEntry {
+  type: KnowledgeType.ISSUE;
+  priority: 'low' | 'medium' | 'high';
+  assignee?: string;
+  dueDate?: Date;
   relatedIds?: string[]; // IDs of related knowledge entries
 }
 
@@ -98,6 +121,17 @@ export interface CreateNoteRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface CreateIssueRequest {
+  content: string;
+  priority: 'low' | 'medium' | 'high';
+  tags?: string[];
+  processId?: string;
+  assignee?: string;
+  dueDate?: Date;
+  relatedIds?: string[];
+  metadata?: Record<string, unknown>;
+}
+
 /**
  * Knowledge update request interface
  */
@@ -105,10 +139,15 @@ export interface UpdateKnowledgeRequest {
   content?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
+  status?: EntryStatus;
   // Type-specific updates
   answered?: boolean; // For questions
   accepted?: boolean; // For answers
   category?: string; // For notes
+  priority?: 'low' | 'medium' | 'high'; // For issues
+  assignee?: string; // For issues
+  dueDate?: Date; // For issues
+  relatedIds?: string[]; // For issues and notes
 }
 
 /**
@@ -129,6 +168,7 @@ export interface KnowledgeStats {
     questions: number;
     answers: number;
     notes: number;
+    issues: number;
   };
   byStatus: {
     answeredQuestions: number;
@@ -180,6 +220,10 @@ export function isAnswer(entry: KnowledgeEntry): entry is Answer {
 
 export function isNote(entry: KnowledgeEntry): entry is Note {
   return entry.type === KnowledgeType.NOTE;
+}
+
+export function isIssue(entry: KnowledgeEntry): entry is Issue {
+  return entry.type === KnowledgeType.ISSUE;
 }
 
 /**
@@ -300,6 +344,57 @@ export function isValidCreateNoteRequest(obj: unknown): obj is CreateNoteRequest
 }
 
 /**
+ * Type guard to validate CreateIssueRequest
+ */
+export function isValidCreateIssueRequest(obj: unknown): obj is CreateIssueRequest {
+  if (!obj || typeof obj !== 'object') return false;
+  
+  const req = obj as Record<string, unknown>;
+  
+  // content validation
+  if (typeof req.content !== 'string' || 
+      req.content.length < KNOWLEDGE_VALIDATION.MIN_CONTENT_LENGTH ||
+      req.content.length > KNOWLEDGE_VALIDATION.MAX_CONTENT_LENGTH) {
+    return false;
+  }
+  
+  // priority is required
+  if (!req.priority || !KNOWLEDGE_VALIDATION.VALID_PRIORITIES.includes(req.priority as any)) {
+    return false;
+  }
+  
+  // tags validation (same as others)
+  if (req.tags !== undefined) {
+    if (!Array.isArray(req.tags) || 
+        !req.tags.every(tag => typeof tag === 'string' && 
+                               tag.length >= KNOWLEDGE_VALIDATION.MIN_TAG_LENGTH &&
+                               tag.length <= KNOWLEDGE_VALIDATION.MAX_TAG_LENGTH) ||
+        req.tags.length > KNOWLEDGE_VALIDATION.MAX_TAGS) {
+      return false;
+    }
+  }
+  
+  // assignee is optional but must be string if present
+  if (req.assignee !== undefined && typeof req.assignee !== 'string') {
+    return false;
+  }
+  
+  // dueDate is optional but must be Date if present
+  if (req.dueDate !== undefined && !(req.dueDate instanceof Date)) {
+    return false;
+  }
+  
+  // relatedIds is optional but must be string array if present
+  if (req.relatedIds !== undefined && 
+      (!Array.isArray(req.relatedIds) || 
+       !req.relatedIds.every(id => typeof id === 'string'))) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Validate tag format
  */
 export function isValidTag(tag: string): boolean {
@@ -320,3 +415,22 @@ export interface KnowledgeEvents extends Record<string, unknown> {
   'knowledge:unlinked': { questionId: string; answerId: string };
   'knowledge:accepted': { questionId: string; answerId: string };
 }
+
+/**
+ * File-based backend constants
+ */
+export const KNOWLEDGE_ROOT = '.knowledge' as const;
+
+export const STATUS_FOLDERS = {
+  [EntryStatus.OPEN]: 'open',
+  [EntryStatus.IN_PROGRESS]: 'in-progress',
+  [EntryStatus.COMPLETED]: 'completed',
+  [EntryStatus.ARCHIVED]: 'archived'
+} as const;
+
+export const TYPE_PREFIXES = {
+  [KnowledgeType.QUESTION]: 'QUESTION_',
+  [KnowledgeType.ANSWER]: 'ANSWER_',
+  [KnowledgeType.NOTE]: 'NOTE_',
+  [KnowledgeType.ISSUE]: 'ISSUE_'
+} as const;

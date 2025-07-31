@@ -11,7 +11,7 @@ import { MCPProcessServer } from './mcp/server.ts';
 import { ProcessManager } from './process/manager.ts';
 import { ProcessRegistry } from './process/registry.ts';
 import { ProcessMonitoringConfig } from './process/types.ts';
-import { KnowledgeManager } from './knowledge/manager.ts';
+import { FileKnowledgeManager } from './knowledge/file-manager.ts';
 import { IntegratedQueueManager } from './queue/integrated-manager.ts';
 
 /**
@@ -49,8 +49,8 @@ async function main(): Promise<void> {
     // Create ProcessManager with registry and monitoring config
     const processManager = new ProcessManager(registry, monitoringConfig);
     
-    // Create KnowledgeManager for Q&A and notes
-    const knowledgeManager = new KnowledgeManager();
+    // Create FileKnowledgeManager for Q&A, notes, and issues
+    const knowledgeManager = new FileKnowledgeManager();
     
     // Create IntegratedQueueManager for process queuing
     const queueManager = new IntegratedQueueManager(processManager, {
@@ -91,15 +91,7 @@ async function main(): Promise<void> {
     Deno.addSignalListener('SIGTERM', () => handleShutdown('SIGTERM'));
     
     // Wait indefinitely - the server handles all client communication via stdio
-    while (true) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Optionally log server stats periodically
-      if (Deno.env.get('DEBUG') === 'true') {
-        const info = mcpServer.getServerInfo();
-        log('[Main] Server Stats: ' + JSON.stringify(info.processManagerStats));
-      }
-    }
+    await new Promise(() => {}); // Never resolves, keeps process alive
     
   } catch (error) {
     logError('[Main] Failed to start MCP Process Server:', error);

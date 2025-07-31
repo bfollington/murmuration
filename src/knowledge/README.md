@@ -53,17 +53,37 @@ The Knowledge Management System is a comprehensive solution for capturing, organ
 - Summary report generation
 - Duplicate tag detection
 
+### ✅ Step 8: Implement File-Based Search Operations
+- Created `file-search.ts` with efficient search and listing utilities
+- Full-text search across content, tags, and metadata with relevance scoring
+- Advanced filtering by type, status, tags, and process ID
+- Pagination and sorting support for large knowledge bases
+- Statistics and file path utilities
+- Performance optimized for 1000+ entries
+
+### ✅ Step 9: Add Cross-Reference Resolution
+- Created `cross-references.ts` for `[[ENTRY_ID]]` syntax handling
+- Bidirectional reference tracking and validation
+- Broken reference detection across entire knowledge base
+- Reference update utilities for ID changes
+- Syntax validation with fix suggestions
+- Comprehensive reference statistics and analytics
+
 ## Architecture
 
 ```
 src/knowledge/
-├── types.ts          # Core domain types and validation
-├── registry.ts       # Data layer with indexing
-├── manager.ts        # Business logic and orchestration
-├── persistence.ts    # File-based storage
-├── statistics.ts     # Analytics and reporting
-├── mod.ts           # Module exports
-└── *.test.ts        # Comprehensive test coverage
+├── types.ts           # Core domain types and validation
+├── registry.ts        # Data layer with indexing
+├── manager.ts         # Business logic and orchestration
+├── persistence.ts     # File-based storage
+├── statistics.ts      # Analytics and reporting
+├── file-search.ts     # Search and listing utilities
+├── cross-references.ts # Cross-reference resolution
+├── file-io.ts         # File format utilities
+├── file-format.ts     # Markdown format specification
+├── mod.ts            # Module exports
+└── *.test.ts         # Comprehensive test coverage
 ```
 
 ## Key Features
@@ -96,6 +116,18 @@ src/knowledge/
 - Type-safe event emitter
 - Real-time notifications
 - Integration ready for WebSocket
+
+### 6. **File-Based Search**
+- Full-text search with relevance scoring
+- Advanced filtering and pagination
+- Efficient file scanning with glob patterns
+- Performance optimized for large knowledge bases
+
+### 7. **Cross-Reference System**
+- `[[ENTRY_ID]]` syntax for linking entries
+- Bidirectional reference tracking
+- Broken reference detection and repair
+- Syntax validation with fix suggestions
 
 ## Usage Examples
 
@@ -156,6 +188,64 @@ knowledgeManager.on('knowledge:accepted', ({ questionId, answerId }) => {
 });
 ```
 
+### File-Based Search Operations
+```typescript
+import { searchEntries, listEntries, findEntriesById } from './file-search.ts';
+
+// Full-text search with relevance scoring
+const results = await searchEntries({
+  query: 'timeout configuration',
+  searchFields: ['content', 'tags'],
+  caseSensitive: false,
+  type: KnowledgeType.QUESTION
+});
+
+// List entries with filtering and pagination
+const recentIssues = await listEntries({
+  type: KnowledgeType.ISSUE,
+  status: EntryStatus.OPEN,
+  sortBy: 'lastUpdated',
+  sortOrder: 'desc',
+  limit: 10
+});
+
+// Find specific entries by ID
+const entries = await findEntriesById(['QUESTION_1', 'ANSWER_42']);
+```
+
+### Cross-Reference Management
+```typescript
+import { 
+  resolveCrossReferences, 
+  findRelatedEntries,
+  validateCrossReferenceSyntax,
+  updateReferences 
+} from './cross-references.ts';
+
+// Validate references in content
+const content = 'See [[QUESTION_1]] and [[MISSING_123]] for details.';
+const validations = await resolveCrossReferences(content);
+
+validations.forEach(v => {
+  if (!v.exists) {
+    console.log(`Broken reference: ${v.reference.id}`);
+  }
+});
+
+// Find related entries
+const related = await findRelatedEntries('ISSUE_123');
+console.log(`Referenced by ${related.referencedBy.length} entries`);
+
+// Validate syntax and get suggestions
+const issues = validateCrossReferenceSyntax('[QUESTION_1]');
+issues.forEach(issue => {
+  console.log(`${issue.issue}: ${issue.suggestion}`);
+});
+
+// Update references when renaming entries
+await updateReferences('OLD_ENTRY_1', 'NEW_ENTRY_1');
+```
+
 ## Test Coverage
 
 All components have comprehensive test coverage:
@@ -163,8 +253,10 @@ All components have comprehensive test coverage:
 - **Manager**: 13 tests covering business logic and events  
 - **Persistence**: 10 tests covering save/load and concurrency
 - **Statistics**: 8 tests covering analytics and reporting
+- **File Search**: 15 tests covering search, listing, and filtering
+- **Cross References**: 13 tests covering resolution and validation
 
-Total: **47 tests** all passing ✅
+Total: **75 tests** all passing ✅
 
 ## Performance Characteristics
 
