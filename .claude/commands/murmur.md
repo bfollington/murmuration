@@ -20,9 +20,10 @@ mcp.list_issues({ status: "in-progress" })
 **Before implementing ANY feature:**
 1. Check if an issue exists for it
 2. If not, create an issue FIRST using `mcp.record_issue()`
-3. Update the issue to "in-progress" when you start work
-4. Record progress and findings in the issue as you work
-5. Mark as "completed" when done
+3. Include checkboxes in the markdown of new issues
+4. Update the issue to "in-progress" when you start work
+5. Record progress and findings in the issue as you work
+6. Mark as "completed" when done
 
 ### 2. Use Persistent Issue Tracking
 
@@ -76,7 +77,7 @@ When starting a new session, ALWAYS:
    ```bash
    # Search for relevant context
    Glob({ pattern: ".knowledge/**/*.md" })
-   
+
    # Look for specific topics
    mcp.list_notes({ category: "configuration" })
    mcp.list_questions_and_answers({ answered: true })
@@ -86,7 +87,7 @@ When starting a new session, ALWAYS:
    ```bash
    # See what needs attention
    mcp.list_issues({ status: "open", limit: 10 })
-   
+
    # Check high-priority items
    mcp.list_issues({ status: "open", tags: ["high-priority"] })
    ```
@@ -107,9 +108,9 @@ When starting a new session, ALWAYS:
 
 ```typescript
 // 1. First, check if issue exists
-const issues = await mcp.list_issues({ 
-  status: "open", 
-  tags: ["enhancement"] 
+const issues = await mcp.list_issues({
+  status: "open",
+  tags: ["enhancement"]
 });
 
 // 2. Create issue if needed
@@ -151,9 +152,9 @@ await mcp.update_issue({
 
 ```typescript
 // 1. Find the bug report
-const bugs = await mcp.list_issues({ 
-  status: "open", 
-  tags: ["bug"] 
+const bugs = await mcp.list_issues({
+  status: "open",
+  tags: ["bug"]
 });
 
 // 2. Get full details of the issue
