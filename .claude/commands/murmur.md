@@ -35,13 +35,28 @@ mcp.list_issues({ status: "in-progress" })
 
 **Example workflow:**
 ```typescript
-// BAD: Using TodoWrite (ephemeral, lost between sessions)
-TodoWrite([{ content: "Fix memory leak", status: "pending" }])
-
-// GOOD: Using issue tracking (persistent, collaborative)
+// BAD: Speculative and wordy
 mcp.record_issue({
   title: "Fix WebSocket memory leak",
-  content: "Detailed description of the problem...",
+  content: "There might be a memory leak in WebSocket handling. We should probably check if connections are being cleaned up properly. Maybe the event listeners aren't being removed. Could be related to the reconnection logic...",
+  priority: "high",
+  tags: ["bug", "websocket", "memory"]
+})
+
+// GOOD: Evidence-based and concise
+mcp.record_issue({
+  title: "Fix WebSocket memory leak",
+  content: "## Evidence
+- Memory usage increases 50MB/hour when WebSocket active (measured via monitoring)
+- Found unclosed connections in heap dump at src/web/server.ts:145
+
+## Questions
+- Are reconnection handlers being cleaned up?
+- Is the connection pool size limited?
+
+## Known subtasks
+- [ ] Add connection cleanup in disconnect handler
+- [ ] Implement connection pool limit",
   priority: "high",
   tags: ["bug", "websocket", "memory"]
 })
@@ -113,10 +128,21 @@ const issues = await mcp.list_issues({
   tags: ["enhancement"]
 });
 
-// 2. Create issue if needed
+// 2. Create issue with facts, not speculation
 const issue = await mcp.record_issue({
   title: "Add authentication to WebSocket server",
-  content: "Implement JWT-based auth for WebSocket connections",
+  content: `## Current State
+- WebSocket accepts any connection (src/web/server.ts:89)
+- No auth headers checked
+
+## Questions
+- Use JWT or session tokens?
+- Should we support multiple auth methods?
+
+## Known subtasks
+- [ ] Add auth middleware to WebSocket upgrade
+- [ ] Implement token validation
+- [ ] Add auth error handling`,
   priority: "medium",
   tags: ["enhancement", "security", "websocket"]
 });
@@ -209,6 +235,10 @@ await mcp.update_issue({
    - Use consistent tags (bug, enhancement, documentation)
    - Update status as work progresses
    - Cross-reference related issues
+   - **Be concise**: State facts, not theories
+   - **Show evidence**: Include file paths, line numbers, measurements
+   - **Ask clear questions**: What specifically needs clarification?
+   - **List concrete tasks**: Only include known, actionable steps
 
 2. **Knowledge Capture:**
    - Document solutions in notes for future reference
