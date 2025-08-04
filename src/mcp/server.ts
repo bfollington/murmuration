@@ -10,12 +10,9 @@ import {
 import { ProcessManager } from '../process/manager.ts';
 import { StartProcessRequest, isValidStartProcessRequest } from '../process/types.ts';
 import { logger } from '../shared/logger.ts';
-import { KnowledgeManager } from '../knowledge/manager.ts';
 import { FileKnowledgeManager } from '../knowledge/file-manager.ts';
 import { IntegratedQueueManager } from '../queue/integrated-manager.ts';
 import { 
-  CreateQuestionRequest, 
-  CreateNoteRequest,
   CreateIssueRequest,
   UpdateKnowledgeRequest,
   KnowledgeQuery,
@@ -44,7 +41,7 @@ import { fragmentToolDefinitions, fragmentToolHandlers } from './tools/fragment.
 export class MCPProcessServer {
   private readonly server: Server;
   private readonly processManager: ProcessManager;
-  private readonly knowledgeManager: KnowledgeManager | FileKnowledgeManager;
+  private readonly knowledgeManager: FileKnowledgeManager;
   private readonly queueManager: IntegratedQueueManager;
   private readonly milestoneManager: MilestoneManager;
   private transport: StdioServerTransport | null = null;
@@ -54,13 +51,13 @@ export class MCPProcessServer {
   /**
    * Initialize MCP server with dependency injection for all managers
    * @param processManager - ProcessManager instance for direct process operations
-   * @param knowledgeManager - KnowledgeManager or FileKnowledgeManager instance for Q&A, notes, and issues
+   * @param knowledgeManager - FileKnowledgeManager instance for issues
    * @param queueManager - IntegratedQueueManager instance for queued process operations
    * @param milestoneManager - MilestoneManager instance for milestone tracking
    */
   constructor(
     processManager: ProcessManager,
-    knowledgeManager: KnowledgeManager | FileKnowledgeManager,
+    knowledgeManager: FileKnowledgeManager,
     queueManager: IntegratedQueueManager,
     milestoneManager: MilestoneManager
   ) {
@@ -68,7 +65,7 @@ export class MCPProcessServer {
       throw new Error('ProcessManager is required');
     }
     if (!knowledgeManager) {
-      throw new Error('KnowledgeManager is required');
+      throw new Error('FileKnowledgeManager is required');
     }
     if (!queueManager) {
       throw new Error('IntegratedQueueManager is required');
@@ -675,8 +672,6 @@ export class MCPProcessServer {
               required: ['title', 'description'],
             },
           },
-          // Fragment tools (replacing old knowledge tools)
-          ...fragmentToolDefinitions,
         ],
       };
     });
@@ -1800,7 +1795,7 @@ export class MCPProcessServer {
       };
       
       // Create issue using FileKnowledgeManager
-      const result = await (this.knowledgeManager as FileKnowledgeManager).createIssue(request);
+      const result = await this.knowledgeManager.createIssue(request);
       
       if (!result.success) {
         throw new McpError(
@@ -1878,7 +1873,7 @@ export class MCPProcessServer {
       }
       
       // Search issues using FileKnowledgeManager
-      const entries = await (this.knowledgeManager as FileKnowledgeManager).searchEntries(query);
+      const entries = await this.knowledgeManager.searchEntries(query);
       
       // Apply status filtering if specified (since query doesn't support it yet)
       let filteredEntries = entries;
@@ -1972,7 +1967,7 @@ export class MCPProcessServer {
       // Handle title and content updates
       if (params.title !== undefined || params.content !== undefined) {
         // Get current issue to merge title/content properly
-        const currentIssue = await (this.knowledgeManager as FileKnowledgeManager).getEntry(params.issue_id);
+        const currentIssue = await this.knowledgeManager.getEntry(params.issue_id);
         if (!currentIssue) {
           throw new McpError(ErrorCode.InvalidRequest, `Issue with ID ${params.issue_id} not found`);
         }
@@ -2020,7 +2015,7 @@ export class MCPProcessServer {
       }
       
       // Update issue using FileKnowledgeManager
-      const result = await (this.knowledgeManager as FileKnowledgeManager).updateEntry(params.issue_id, updates);
+      const result = await this.knowledgeManager.updateEntry(params.issue_id, updates);
       
       if (!result.success) {
         throw new McpError(
@@ -2086,7 +2081,7 @@ export class MCPProcessServer {
       }
       
       // Delete issue using FileKnowledgeManager
-      const result = await (this.knowledgeManager as FileKnowledgeManager).deleteEntry(params.issue_id);
+      const result = await this.knowledgeManager.deleteEntry(params.issue_id);
       
       if (!result.success) {
         throw new McpError(
@@ -2138,7 +2133,7 @@ export class MCPProcessServer {
       }
       
       // Get issue using FileKnowledgeManager
-      const entry = await (this.knowledgeManager as FileKnowledgeManager).getEntry(params.issue_id);
+      const entry = await this.knowledgeManager.getEntry(params.issue_id);
       
       if (!entry) {
         throw new McpError(

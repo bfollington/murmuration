@@ -220,25 +220,29 @@ Delete an issue:
 }
 ```
 
-#### Knowledge Management Tools
+#### Knowledge Management Tools (Fragments)
 
-##### `record_note`
-Create a note for documentation:
+##### `record_fragment`
+Store knowledge with automatic embeddings:
 ```json
 {
-  "content": "The WebSocket memory leak was caused by missing removeEventListener calls",
-  "category": "troubleshooting",
-  "tags": ["websocket", "memory", "solution"],
-  "process_id": "uuid-process-id"
+  "title": "WebSocket Memory Leak Solution",
+  "body": "The WebSocket memory leak was caused by missing removeEventListener calls. Fixed by adding cleanup in disconnect handler.",
+  "metadata": {
+    "category": "troubleshooting",
+    "tags": ["websocket", "memory", "solution"],
+    "process_id": "uuid-process-id"
+  }
 }
 ```
 
-##### `record_question` / `record_answer`
-Build a Q&A knowledge base:
+##### `search_fragments_similar`
+Find related knowledge using semantic search:
 ```json
 {
-  "content": "How do we handle WebSocket reconnection?",
-  "tags": ["websocket", "architecture"]
+  "query": "How do we handle WebSocket reconnection?",
+  "limit": 5,
+  "minScore": 0.7
 }
 ```
 

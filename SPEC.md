@@ -206,14 +206,15 @@ For Claude Desktop (`claude_desktop_config.json`):
 
 - Process queuing and batching
 - Enhanced web UI with charts/graphs
-- new tools to track questions, answers and notes during a session
-  - record_question
-  - record_answer
-  - list_questions_and_answers
-  - record_note
-  - list_notes
-  - delete_note
-  - update_note
+- Fragment-based knowledge system with vector search
+  - record_fragment
+  - list_fragments
+  - search_fragments_by_title
+  - search_fragments_similar
+  - get_fragment
+  - update_fragment
+  - delete_fragment
+  - get_fragment_stats
 
 ## Key Technical Considerations
 

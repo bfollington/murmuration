@@ -80,8 +80,7 @@ async function main(): Promise<void> {
         // Shutdown the queue manager
         await queueManager.shutdown();
         
-        // Save knowledge if needed
-        await knowledgeManager.save();
+        // FileKnowledgeManager saves automatically, no manual save needed
         
         Deno.exit(0);
       } catch (error) {

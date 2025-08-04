@@ -1,12 +1,12 @@
 /**
  * Knowledge Management Module
  * 
- * Provides comprehensive knowledge base functionality including:
- * - Questions, Answers, and Notes
- * - Persistence with file-based storage
- * - Advanced statistics and analytics
- * - Event-driven updates
- * - Search and filtering capabilities
+ * Provides knowledge base functionality including:
+ * - Issue tracking with file-based storage
+ * - Milestone management
+ * - Fragment-based semantic search and document management
+ * - Cross-referencing system
+ * - File I/O operations
  * 
  * @module knowledge
  */
@@ -14,61 +14,66 @@
 // Core types
 export * from './types.ts';
 
-// Data layer
-export { KnowledgeRegistry, knowledgeRegistry } from './registry.ts';
+// File-based issue management
+export * from './file-manager.ts';
+export * as FileIO from './file-io.ts';
+export * from './file-format.ts';
+export * from './file-search.ts';
 
-// Business logic
-export { KnowledgeManager, knowledgeManager } from './manager.ts';
+// Milestone management
+export * from './milestone-manager.ts';
+export * from './milestone-persistence.ts';
 
-// Persistence
-export { KnowledgePersistence, knowledgePersistence } from './persistence.ts';
+// Fragment system for semantic search
+export * from './fragments/mod.ts';
 
-// Analytics
-export { KnowledgeStatistics, AdvancedKnowledgeStats } from './statistics.ts';
+// Cross-referencing system
+export * from './cross-references.ts';
 
 // Re-export commonly used types for convenience
 export type {
-  Question,
-  Answer,
-  Note,
+  Issue,
+  Milestone,
   KnowledgeEntry,
   KnowledgeQuery,
   KnowledgeStats,
-  CreateQuestionRequest,
-  CreateAnswerRequest,
-  CreateNoteRequest,
+  CreateIssueRequest,
+  CreateMilestoneRequest,
   UpdateKnowledgeRequest,
   KnowledgeResult,
-  KnowledgeEvents
+  EntryStatus
 } from './types.ts';
 
 /**
  * Quick start example:
  * 
  * ```typescript
- * import { knowledgeManager } from './knowledge/mod.ts';
+ * import { FileManager, MilestoneManager } from './knowledge/mod.ts';
  * 
- * // Initialize and load existing knowledge
- * await knowledgeManager.load();
+ * // Initialize issue management
+ * const fileManager = new FileManager();
+ * await fileManager.initialize();
  * 
- * // Enable auto-save
- * knowledgeManager.setAutoSave(true);
- * 
- * // Create a question
- * const result = await knowledgeManager.createQuestion({
- *   content: "How do I implement authentication?",
- *   tags: ["auth", "security"],
- *   priority: "high"
+ * // Create an issue
+ * const result = await fileManager.createIssue({
+ *   title: "Fix memory leak",
+ *   content: "Memory usage keeps growing during long operations",
+ *   priority: "high",
+ *   tags: ["bug", "memory"]
  * });
  * 
- * // Search for entries
- * const entries = knowledgeManager.searchEntries({
- *   type: KnowledgeType.QUESTION,
- *   tags: ["auth"],
- *   answered: false
+ * // Search for issues
+ * const issues = await fileManager.searchIssues({
+ *   status: "open",
+ *   tags: ["bug"]
  * });
  * 
- * // Get statistics
- * const stats = knowledgeManager.getStatistics();
+ * // Milestone management
+ * const milestoneManager = new MilestoneManager();
+ * await milestoneManager.setMilestone({
+ *   title: "Version 1.0 Release",
+ *   description: "Complete all features for initial release",
+ *   progress: 75
+ * });
  * ```
  */

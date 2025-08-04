@@ -6,9 +6,6 @@
  * Knowledge entry types
  */
 export enum KnowledgeType {
-  QUESTION = 'question',
-  ANSWER = 'answer',
-  NOTE = 'note',
   ISSUE = 'issue',
   MILESTONE = 'milestone'
 }
@@ -38,34 +35,6 @@ export interface KnowledgeEntry {
   metadata: Record<string, unknown>;
 }
 
-/**
- * Question entry for tracking questions about the system or processes
- */
-export interface Question extends KnowledgeEntry {
-  type: KnowledgeType.QUESTION;
-  answered: boolean;
-  answerIds: string[]; // IDs of related answers
-  priority?: 'low' | 'medium' | 'high';
-}
-
-/**
- * Answer entry for responses to questions
- */
-export interface Answer extends KnowledgeEntry {
-  type: KnowledgeType.ANSWER;
-  questionId: string; // ID of the question this answers
-  accepted: boolean; // Whether this is the accepted answer
-  votes?: number; // For future ranking
-}
-
-/**
- * Note entry for general observations and documentation
- */
-export interface Note extends KnowledgeEntry {
-  type: KnowledgeType.NOTE;
-  category?: string; // e.g., 'observation', 'todo', 'idea'
-  relatedIds?: string[]; // IDs of related knowledge entries
-}
 
 /**
  * Issue entry for tracking actionable tasks and problems
@@ -98,8 +67,6 @@ export interface KnowledgeQuery {
   tags?: string[];
   processId?: string;
   search?: string; // Text search in content
-  answered?: boolean; // For questions only
-  category?: string; // For notes only
   limit?: number;
   offset?: number;
   sortBy?: 'timestamp' | 'lastUpdated' | 'type';
@@ -109,30 +76,6 @@ export interface KnowledgeQuery {
 /**
  * Knowledge creation request interfaces
  */
-export interface CreateQuestionRequest {
-  content: string;
-  tags?: string[];
-  processId?: string;
-  priority?: 'low' | 'medium' | 'high';
-  metadata?: Record<string, unknown>;
-}
-
-export interface CreateAnswerRequest {
-  content: string;
-  questionId: string;
-  tags?: string[];
-  processId?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface CreateNoteRequest {
-  content: string;
-  tags?: string[];
-  processId?: string;
-  category?: string;
-  relatedIds?: string[];
-  metadata?: Record<string, unknown>;
-}
 
 export interface CreateIssueRequest {
   content: string;
@@ -166,13 +109,10 @@ export interface UpdateKnowledgeRequest {
   metadata?: Record<string, unknown>;
   status?: EntryStatus;
   // Type-specific updates
-  answered?: boolean; // For questions
-  accepted?: boolean; // For answers
-  category?: string; // For notes
   priority?: 'low' | 'medium' | 'high'; // For issues
   assignee?: string; // For issues
   dueDate?: Date; // For issues
-  relatedIds?: string[]; // For issues and notes
+  relatedIds?: string[]; // For issues
 }
 
 /**
@@ -190,16 +130,8 @@ export interface KnowledgeResult<T = KnowledgeEntry> {
 export interface KnowledgeStats {
   totalEntries: number;
   byType: {
-    questions: number;
-    answers: number;
-    notes: number;
     issues: number;
     milestones: number;
-  };
-  byStatus: {
-    answeredQuestions: number;
-    unansweredQuestions: number;
-    acceptedAnswers: number;
   };
   tagFrequency: Record<string, number>;
   processCorrelation: Record<string, number>;
@@ -236,17 +168,6 @@ export interface KnowledgeEvent {
 /**
  * Type guards for knowledge entries
  */
-export function isQuestion(entry: KnowledgeEntry): entry is Question {
-  return entry.type === KnowledgeType.QUESTION;
-}
-
-export function isAnswer(entry: KnowledgeEntry): entry is Answer {
-  return entry.type === KnowledgeType.ANSWER;
-}
-
-export function isNote(entry: KnowledgeEntry): entry is Note {
-  return entry.type === KnowledgeType.NOTE;
-}
 
 export function isIssue(entry: KnowledgeEntry): entry is Issue {
   return entry.type === KnowledgeType.ISSUE;
@@ -275,109 +196,6 @@ export const KNOWLEDGE_VALIDATION = {
   MAX_PROGRESS: 100
 } as const;
 
-/**
- * Type guard to validate CreateQuestionRequest
- */
-export function isValidCreateQuestionRequest(obj: unknown): obj is CreateQuestionRequest {
-  if (!obj || typeof obj !== 'object') return false;
-  
-  const req = obj as Record<string, unknown>;
-  
-  // content is required and must be a non-empty string
-  if (typeof req.content !== 'string' || 
-      req.content.length < KNOWLEDGE_VALIDATION.MIN_CONTENT_LENGTH ||
-      req.content.length > KNOWLEDGE_VALIDATION.MAX_CONTENT_LENGTH) {
-    return false;
-  }
-  
-  // tags is optional but must be string array if present
-  if (req.tags !== undefined) {
-    if (!Array.isArray(req.tags) || 
-        !req.tags.every(tag => typeof tag === 'string' && 
-                               tag.length >= KNOWLEDGE_VALIDATION.MIN_TAG_LENGTH &&
-                               tag.length <= KNOWLEDGE_VALIDATION.MAX_TAG_LENGTH) ||
-        req.tags.length > KNOWLEDGE_VALIDATION.MAX_TAGS) {
-      return false;
-    }
-  }
-  
-  // priority is optional but must be valid if present
-  if (req.priority !== undefined && 
-      !KNOWLEDGE_VALIDATION.VALID_PRIORITIES.includes(req.priority as any)) {
-    return false;
-  }
-  
-  // processId is optional but must be string if present
-  if (req.processId !== undefined && typeof req.processId !== 'string') {
-    return false;
-  }
-  
-  return true;
-}
-
-/**
- * Type guard to validate CreateAnswerRequest
- */
-export function isValidCreateAnswerRequest(obj: unknown): obj is CreateAnswerRequest {
-  if (!obj || typeof obj !== 'object') return false;
-  
-  const req = obj as Record<string, unknown>;
-  
-  // questionId is required
-  if (typeof req.questionId !== 'string' || req.questionId.length === 0) {
-    return false;
-  }
-  
-  // content validation (same as question)
-  if (typeof req.content !== 'string' || 
-      req.content.length < KNOWLEDGE_VALIDATION.MIN_CONTENT_LENGTH ||
-      req.content.length > KNOWLEDGE_VALIDATION.MAX_CONTENT_LENGTH) {
-    return false;
-  }
-  
-  // tags validation (same as question)
-  if (req.tags !== undefined) {
-    if (!Array.isArray(req.tags) || 
-        !req.tags.every(tag => typeof tag === 'string' && 
-                               tag.length >= KNOWLEDGE_VALIDATION.MIN_TAG_LENGTH &&
-                               tag.length <= KNOWLEDGE_VALIDATION.MAX_TAG_LENGTH) ||
-        req.tags.length > KNOWLEDGE_VALIDATION.MAX_TAGS) {
-      return false;
-    }
-  }
-  
-  return true;
-}
-
-/**
- * Type guard to validate CreateNoteRequest
- */
-export function isValidCreateNoteRequest(obj: unknown): obj is CreateNoteRequest {
-  if (!obj || typeof obj !== 'object') return false;
-  
-  const req = obj as Record<string, unknown>;
-  
-  // content validation
-  if (typeof req.content !== 'string' || 
-      req.content.length < KNOWLEDGE_VALIDATION.MIN_CONTENT_LENGTH ||
-      req.content.length > KNOWLEDGE_VALIDATION.MAX_CONTENT_LENGTH) {
-    return false;
-  }
-  
-  // category is optional but must be valid if present
-  if (req.category !== undefined && typeof req.category !== 'string') {
-    return false;
-  }
-  
-  // relatedIds is optional but must be string array if present
-  if (req.relatedIds !== undefined && 
-      (!Array.isArray(req.relatedIds) || 
-       !req.relatedIds.every(id => typeof id === 'string'))) {
-    return false;
-  }
-  
-  return true;
-}
 
 /**
  * Type guard to validate CreateIssueRequest
@@ -534,9 +352,6 @@ export const STATUS_FOLDERS = {
 } as const;
 
 export const TYPE_PREFIXES = {
-  [KnowledgeType.QUESTION]: 'QUESTION_',
-  [KnowledgeType.ANSWER]: 'ANSWER_',
-  [KnowledgeType.NOTE]: 'NOTE_',
   [KnowledgeType.ISSUE]: 'ISSUE_',
   [KnowledgeType.MILESTONE]: 'MILESTONE_'
 } as const;

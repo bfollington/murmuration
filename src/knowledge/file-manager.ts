@@ -1,8 +1,8 @@
 /**
- * File-based Knowledge Manager Implementation
+ * File-based Issue Manager Implementation
  * 
- * This module provides a file-based implementation of the KnowledgeManager interface,
- * storing each knowledge entry as a markdown file with YAML frontmatter.
+ * This module provides a file-based implementation for managing issues,
+ * storing each issue as a markdown file with YAML frontmatter.
  * 
  * Files are organized by status in directories:
  * - .knowledge/open/
@@ -14,29 +14,17 @@
 import { EventEmitter } from '../shared/event-emitter.ts';
 import {
   KnowledgeEntry,
-  Question,
-  Answer,
-  Note,
   Issue,
   KnowledgeType,
   EntryStatus,
   KnowledgeQuery,
   KnowledgeStats,
-  CreateQuestionRequest,
-  CreateAnswerRequest,
-  CreateNoteRequest,
   CreateIssueRequest,
   UpdateKnowledgeRequest,
   KnowledgeResult,
   KnowledgeEvents,
-  isValidCreateQuestionRequest,
-  isValidCreateAnswerRequest,
-  isValidCreateNoteRequest,
   isValidCreateIssueRequest,
   isValidTag,
-  isQuestion,
-  isAnswer,
-  isNote,
   isIssue,
   KNOWLEDGE_ROOT,
   STATUS_FOLDERS,
@@ -49,15 +37,15 @@ import {
   ensureKnowledgeDirectories,
   convertFrontmatterDates,
   validateParsedEntry,
-  getNextEntryNumber
+  getNextEntryNumber,
+  ParsedMarkdownFile
 } from './file-io.ts';
 import { join } from "https://deno.land/std@0.208.0/path/mod.ts";
 
 /**
- * File-based Knowledge Manager - Drop-in replacement for KnowledgeManager
+ * File-based Knowledge Manager for Issues
  * 
- * Stores knowledge entries as markdown files with YAML frontmatter.
- * Maintains the same API as the registry-based KnowledgeManager.
+ * Provides CRUD operations for issues with file-based persistence.
  */
 export class FileKnowledgeManager {
   private readonly events = new EventEmitter<KnowledgeEvents>();
@@ -98,341 +86,17 @@ export class FileKnowledgeManager {
   /**
    * Find an entry by ID across all status folders
    */
-  private async findEntryPath(id: string): Promise<string | null> {
+  private async findEntryFile(id: string): Promise<string | null> {
     for (const status of Object.values(EntryStatus)) {
       const filePath = this.buildFilePathForStatus(id, status);
       try {
         await Deno.stat(filePath);
         return filePath;
-      } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) {
-          throw error;
-        }
+      } catch {
+        // File doesn't exist in this status folder, continue
       }
     }
     return null;
-  }
-
-  /**
-   * Load an entry from file
-   */
-  private async loadEntry(filePath: string): Promise<KnowledgeEntry> {
-    const parsed = await parseMarkdownFile(filePath);
-    const frontmatter = convertFrontmatterDates(parsed.frontmatter);
-    
-    if (!validateParsedEntry(frontmatter, parsed.content)) {
-      throw new Error(`Invalid entry format in file: ${filePath}`);
-    }
-
-    // Construct the entry object based on type
-    const baseEntry = {
-      id: frontmatter.id as string,
-      type: frontmatter.type as KnowledgeType,
-      content: parsed.content,
-      timestamp: frontmatter.timestamp as Date,
-      lastUpdated: frontmatter.lastUpdated as Date,
-      tags: frontmatter.tags as string[],
-      status: frontmatter.status as EntryStatus,
-      processId: frontmatter.processId as string | undefined,
-      metadata: (frontmatter.metadata as Record<string, unknown>) || {}
-    };
-
-    // Add type-specific fields
-    switch (baseEntry.type) {
-      case KnowledgeType.QUESTION:
-        return {
-          ...baseEntry,
-          answered: frontmatter.answered as boolean,
-          answerIds: (frontmatter.answerIds as string[]) || [],
-          priority: frontmatter.priority as 'low' | 'medium' | 'high' | undefined
-        } as Question;
-
-      case KnowledgeType.ANSWER:
-        return {
-          ...baseEntry,
-          questionId: frontmatter.questionId as string,
-          accepted: frontmatter.accepted as boolean,
-          votes: frontmatter.votes as number | undefined
-        } as Answer;
-
-      case KnowledgeType.NOTE:
-        return {
-          ...baseEntry,
-          category: frontmatter.category as string | undefined,
-          relatedIds: frontmatter.relatedIds as string[] | undefined
-        } as Note;
-
-      case KnowledgeType.ISSUE:
-        return {
-          ...baseEntry,
-          priority: frontmatter.priority as 'low' | 'medium' | 'high',
-          assignee: frontmatter.assignee as string | undefined,
-          dueDate: frontmatter.dueDate as Date | undefined,
-          relatedIds: frontmatter.relatedIds as string[] | undefined
-        } as Issue;
-
-      default:
-        throw new Error(`Unknown knowledge type: ${baseEntry.type}`);
-    }
-  }
-
-  /**
-   * Save an entry to file
-   */
-  private async saveEntry(entry: KnowledgeEntry): Promise<void> {
-    await this.ensureInitialized();
-    
-    const filePath = buildFilePath(entry);
-    const markdown = serializeToMarkdown(entry);
-    
-    // Ensure the directory exists
-    const dir = filePath.substring(0, filePath.lastIndexOf('/'));
-    await Deno.mkdir(dir, { recursive: true });
-    
-    await Deno.writeTextFile(filePath, markdown);
-  }
-
-  /**
-   * Move an entry file when status changes
-   */
-  private async moveEntryFile(id: string, oldStatus: EntryStatus, newStatus: EntryStatus): Promise<void> {
-    const oldPath = this.buildFilePathForStatus(id, oldStatus);
-    const newPath = this.buildFilePathForStatus(id, newStatus);
-    
-    // Ensure the new directory exists
-    const newDir = newPath.substring(0, newPath.lastIndexOf('/'));
-    await Deno.mkdir(newDir, { recursive: true });
-    
-    try {
-      await Deno.rename(oldPath, newPath);
-    } catch (error) {
-      // If rename fails, try copy + delete
-      const content = await Deno.readTextFile(oldPath);
-      await Deno.writeTextFile(newPath, content);
-      await Deno.remove(oldPath);
-    }
-  }
-
-  /**
-   * Update question-answer linking when answers are created
-   */
-  private async linkAnswerToQuestion(answerId: string, questionId: string): Promise<void> {
-    const questionPath = await this.findEntryPath(questionId);
-    if (!questionPath) {
-      throw new Error(`Question with ID ${questionId} not found`);
-    }
-
-    const question = await this.loadEntry(questionPath) as Question;
-    if (!question.answerIds.includes(answerId)) {
-      question.answerIds.push(answerId);
-      question.answered = true;
-      question.lastUpdated = new Date();
-      await this.saveEntry(question);
-    }
-  }
-
-  /**
-   * Create a new question
-   */
-  async createQuestion(request: CreateQuestionRequest): Promise<KnowledgeResult<Question>> {
-    try {
-      // Validate request
-      if (!isValidCreateQuestionRequest(request)) {
-        return { 
-          success: false, 
-          error: 'Invalid question request: missing or invalid required fields' 
-        };
-      }
-
-      // Validate tags
-      if (request.tags) {
-        for (const tag of request.tags) {
-          if (!isValidTag(tag)) {
-            return { 
-              success: false, 
-              error: `Invalid tag format: ${tag}. Tags must be alphanumeric with hyphens or underscores only.` 
-            };
-          }
-        }
-      }
-
-      // Generate ID and create question entry
-      const id = await this.generateEntryId(KnowledgeType.QUESTION);
-      const question: Question = {
-        id,
-        type: KnowledgeType.QUESTION,
-        content: request.content,
-        timestamp: new Date(),
-        lastUpdated: new Date(),
-        tags: request.tags || [],
-        status: EntryStatus.OPEN,
-        processId: request.processId,
-        metadata: request.metadata || {},
-        answered: false,
-        answerIds: [],
-        priority: request.priority || 'medium'
-      };
-
-      // Save to file
-      await this.saveEntry(question);
-
-      // Emit event
-      this.events.emit('knowledge:created', { entry: question });
-
-      return { success: true, data: question };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    }
-  }
-
-  /**
-   * Create a new answer for a question
-   */
-  async createAnswer(request: CreateAnswerRequest): Promise<KnowledgeResult<Answer>> {
-    try {
-      // Validate request
-      if (!isValidCreateAnswerRequest(request)) {
-        return { 
-          success: false, 
-          error: 'Invalid answer request: missing or invalid required fields' 
-        };
-      }
-
-      // Validate tags
-      if (request.tags) {
-        for (const tag of request.tags) {
-          if (!isValidTag(tag)) {
-            return { 
-              success: false, 
-              error: `Invalid tag format: ${tag}` 
-            };
-          }
-        }
-      }
-
-      // Check if question exists
-      const questionPath = await this.findEntryPath(request.questionId);
-      if (!questionPath) {
-        return { 
-          success: false, 
-          error: `Question with ID ${request.questionId} not found` 
-        };
-      }
-
-      const question = await this.loadEntry(questionPath);
-      if (!isQuestion(question)) {
-        return { 
-          success: false, 
-          error: `Entry ${request.questionId} is not a question` 
-        };
-      }
-
-      // Generate ID and create answer entry
-      const id = await this.generateEntryId(KnowledgeType.ANSWER);
-      const answer: Answer = {
-        id,
-        type: KnowledgeType.ANSWER,
-        content: request.content,
-        timestamp: new Date(),
-        lastUpdated: new Date(),
-        tags: request.tags || [],
-        status: EntryStatus.OPEN,
-        processId: request.processId || question.processId,
-        metadata: request.metadata || {},
-        questionId: request.questionId,
-        accepted: false,
-        votes: 0
-      };
-
-      // Save to file
-      await this.saveEntry(answer);
-
-      // Link answer to question
-      await this.linkAnswerToQuestion(answer.id, request.questionId);
-
-      // Emit events
-      this.events.emit('knowledge:created', { entry: answer });
-      this.events.emit('knowledge:linked', { questionId: request.questionId, answerId: answer.id });
-
-      return { success: true, data: answer };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    }
-  }
-
-  /**
-   * Create a new note
-   */
-  async createNote(request: CreateNoteRequest): Promise<KnowledgeResult<Note>> {
-    try {
-      // Validate request
-      if (!isValidCreateNoteRequest(request)) {
-        return { 
-          success: false, 
-          error: 'Invalid note request: missing or invalid required fields' 
-        };
-      }
-
-      // Validate tags
-      if (request.tags) {
-        for (const tag of request.tags) {
-          if (!isValidTag(tag)) {
-            return { 
-              success: false, 
-              error: `Invalid tag format: ${tag}` 
-            };
-          }
-        }
-      }
-
-      // Validate related IDs exist
-      if (request.relatedIds) {
-        for (const id of request.relatedIds) {
-          const path = await this.findEntryPath(id);
-          if (!path) {
-            return { 
-              success: false, 
-              error: `Related entry with ID ${id} not found` 
-            };
-          }
-        }
-      }
-
-      // Generate ID and create note entry
-      const id = await this.generateEntryId(KnowledgeType.NOTE);
-      const note: Note = {
-        id,
-        type: KnowledgeType.NOTE,
-        content: request.content,
-        timestamp: new Date(),
-        lastUpdated: new Date(),
-        tags: request.tags || [],
-        status: EntryStatus.OPEN,
-        processId: request.processId,
-        metadata: request.metadata || {},
-        category: request.category,
-        relatedIds: request.relatedIds
-      };
-
-      // Save to file
-      await this.saveEntry(note);
-
-      // Emit event
-      this.events.emit('knowledge:created', { entry: note });
-
-      return { success: true, data: note };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    }
   }
 
   /**
@@ -440,6 +104,8 @@ export class FileKnowledgeManager {
    */
   async createIssue(request: CreateIssueRequest): Promise<KnowledgeResult<Issue>> {
     try {
+      await this.ensureInitialized();
+
       // Validate request
       if (!isValidCreateIssueRequest(request)) {
         return { 
@@ -460,23 +126,9 @@ export class FileKnowledgeManager {
         }
       }
 
-      // Validate related IDs exist
-      if (request.relatedIds) {
-        for (const id of request.relatedIds) {
-          const path = await this.findEntryPath(id);
-          if (!path) {
-            return { 
-              success: false, 
-              error: `Related entry with ID ${id} not found` 
-            };
-          }
-        }
-      }
-
-      // Generate ID and create issue entry
-      const id = await this.generateEntryId(KnowledgeType.ISSUE);
+      // Create issue entry
       const issue: Issue = {
-        id,
+        id: await this.generateEntryId(KnowledgeType.ISSUE),
         type: KnowledgeType.ISSUE,
         content: request.content,
         timestamp: new Date(),
@@ -491,8 +143,10 @@ export class FileKnowledgeManager {
         relatedIds: request.relatedIds
       };
 
-      // Save to file
-      await this.saveEntry(issue);
+      // Write to file
+      const filePath = buildFilePath(issue);
+      const markdown = serializeToMarkdown(issue);
+      await Deno.writeTextFile(filePath, markdown);
 
       // Emit event
       this.events.emit('knowledge:created', { entry: issue });
@@ -507,24 +161,66 @@ export class FileKnowledgeManager {
   }
 
   /**
-   * Update a knowledge entry
+   * Update an issue
    */
   async updateEntry(id: string, updates: UpdateKnowledgeRequest): Promise<KnowledgeResult<KnowledgeEntry>> {
     try {
-      const existingPath = await this.findEntryPath(id);
-      if (!existingPath) {
+      await this.ensureInitialized();
+
+      // Find the current file
+      const currentFilePath = await this.findEntryFile(id);
+      if (!currentFilePath) {
         return { 
           success: false, 
-          error: `Knowledge entry with ID ${id} not found` 
+          error: `Issue with ID ${id} not found` 
         };
       }
 
-      const existing = await this.loadEntry(existingPath);
-      const previous = { ...existing };
+      // Parse current entry
+      let parseResult: ParsedMarkdownFile;
+      try {
+        parseResult = await parseMarkdownFile(currentFilePath);
+      } catch {
+        return { 
+          success: false, 
+          error: 'Failed to parse current issue file' 
+        };
+      }
+      
+      if (!parseResult.frontmatter || !parseResult.content) {
+        return { 
+          success: false, 
+          error: 'Failed to parse current issue file' 
+        };
+      }
 
-      // Validate tags if provided
-      if (updates.tags) {
-        for (const tag of updates.tags) {
+      // Convert dates and validate
+      const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
+      if (!validateParsedEntry(frontmatter, parseResult.content)) {
+        return { 
+          success: false, 
+          error: 'Current issue file is invalid' 
+        };
+      }
+
+      // Build updated entry
+      const current = frontmatter as unknown as Issue;
+      const updated: Issue = {
+        ...current,
+        content: updates.content !== undefined ? updates.content : current.content,
+        tags: updates.tags !== undefined ? updates.tags : current.tags,
+        status: updates.status !== undefined ? updates.status : current.status,
+        priority: updates.priority !== undefined ? updates.priority : current.priority,
+        assignee: updates.assignee !== undefined ? updates.assignee : current.assignee,
+        dueDate: updates.dueDate !== undefined ? updates.dueDate : current.dueDate,
+        relatedIds: updates.relatedIds !== undefined ? updates.relatedIds : current.relatedIds,
+        metadata: updates.metadata ? { ...current.metadata, ...updates.metadata } : current.metadata,
+        lastUpdated: new Date()
+      };
+
+      // Validate tags if updated
+      if (updated.tags) {
+        for (const tag of updated.tags) {
           if (!isValidTag(tag)) {
             return { 
               success: false, 
@@ -534,56 +230,26 @@ export class FileKnowledgeManager {
         }
       }
 
-      // Check if status is changing (we'll need to move the file)
-      const statusChanging = updates.status !== undefined && updates.status !== existing.status;
-      const oldStatus = existing.status;
+      // Check if we need to move the file due to status change
+      const newFilePath = buildFilePath(updated);
+      
+      // Write updated entry
+      const markdown = serializeToMarkdown(updated);
+      await Deno.writeTextFile(newFilePath, markdown);
 
-      // Apply updates
-      if (updates.content !== undefined) existing.content = updates.content;
-      if (updates.tags !== undefined) existing.tags = updates.tags;
-      if (updates.metadata !== undefined) {
-        existing.metadata = { ...existing.metadata, ...updates.metadata };
-      }
-      if (updates.status !== undefined) existing.status = updates.status;
-
-      // Type-specific updates
-      if (isQuestion(existing) && updates.answered !== undefined) {
-        existing.answered = updates.answered;
-      } else if (isAnswer(existing) && updates.accepted !== undefined) {
-        existing.accepted = updates.accepted;
-      } else if (isNote(existing)) {
-        if (updates.category !== undefined) existing.category = updates.category;
-        if (updates.relatedIds !== undefined) existing.relatedIds = updates.relatedIds;
-      } else if (isIssue(existing)) {
-        if (updates.priority !== undefined) existing.priority = updates.priority;
-        if (updates.assignee !== undefined) existing.assignee = updates.assignee;
-        if (updates.dueDate !== undefined) existing.dueDate = updates.dueDate;
-        if (updates.relatedIds !== undefined) existing.relatedIds = updates.relatedIds;
+      // If file path changed, remove old file
+      if (currentFilePath !== newFilePath) {
+        try {
+          await Deno.remove(currentFilePath);
+        } catch {
+          // Ignore cleanup errors
+        }
       }
 
-      existing.lastUpdated = new Date();
+      // Emit event
+      this.events.emit('knowledge:updated', { entry: updated, previous: current });
 
-      // Handle status change by moving the file
-      if (statusChanging) {
-        await this.moveEntryFile(existing.id, oldStatus, existing.status);
-      }
-
-      // Save updated entry
-      await this.saveEntry(existing);
-
-      // Emit update event
-      this.events.emit('knowledge:updated', { entry: existing, previous });
-
-      // Emit accepted event if answer was accepted
-      if (isAnswer(existing) && isAnswer(previous) && 
-          !previous.accepted && existing.accepted) {
-        this.events.emit('knowledge:accepted', { 
-          questionId: existing.questionId, 
-          answerId: existing.id 
-        });
-      }
-
-      return { success: true, data: existing };
+      return { success: true, data: updated };
     } catch (error) {
       return { 
         success: false, 
@@ -593,52 +259,42 @@ export class FileKnowledgeManager {
   }
 
   /**
-   * Delete a knowledge entry
+   * Delete an issue
    */
   async deleteEntry(id: string): Promise<KnowledgeResult<void>> {
     try {
-      const existingPath = await this.findEntryPath(id);
-      if (!existingPath) {
+      await this.ensureInitialized();
+
+      // Find the current file
+      const filePath = await this.findEntryFile(id);
+      if (!filePath) {
         return { 
           success: false, 
-          error: `Knowledge entry with ID ${id} not found` 
+          error: `Issue with ID ${id} not found` 
         };
       }
 
-      const entry = await this.loadEntry(existingPath);
-
-      // If deleting a question, check for answers
-      if (isQuestion(entry)) {
-        const answers = await this.getAnswersForQuestion(id);
-        if (answers.length > 0) {
-          return { 
-            success: false, 
-            error: `Cannot delete question with existing answers. Delete answers first.` 
-          };
-        }
-      }
-
-      // If deleting an answer, update question's answered status
-      if (isAnswer(entry)) {
-        const questionPath = await this.findEntryPath(entry.questionId);
-        if (questionPath) {
-          const question = await this.loadEntry(questionPath) as Question;
-          question.answerIds = question.answerIds.filter(aid => aid !== id);
-          
-          if (question.answerIds.length === 0) {
-            question.answered = false;
+      // Parse entry for event
+      let entry: Issue | undefined;
+      try {
+        const parseResult = await parseMarkdownFile(filePath);
+        if (parseResult.frontmatter && parseResult.content) {
+          const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
+          if (validateParsedEntry(frontmatter, parseResult.content)) {
+            entry = frontmatter as unknown as Issue;
           }
-          
-          question.lastUpdated = new Date();
-          await this.saveEntry(question);
         }
+      } catch {
+        // Ignore parse errors for event
       }
 
       // Remove file
-      await Deno.remove(existingPath);
+      await Deno.remove(filePath);
 
       // Emit event
-      this.events.emit('knowledge:deleted', { entryId: id, entry });
+      if (entry) {
+        this.events.emit('knowledge:deleted', { entryId: id, entry });
+      }
 
       return { success: true };
     } catch (error) {
@@ -650,388 +306,231 @@ export class FileKnowledgeManager {
   }
 
   /**
-   * Get a knowledge entry by ID
+   * Get an issue by ID
    */
   async getEntry(id: string): Promise<KnowledgeEntry | undefined> {
     try {
-      const path = await this.findEntryPath(id);
-      if (!path) {
+      await this.ensureInitialized();
+
+      const filePath = await this.findEntryFile(id);
+      if (!filePath) {
         return undefined;
       }
-      return await this.loadEntry(path);
-    } catch (error) {
+
+      let parseResult: ParsedMarkdownFile;
+      try {
+        parseResult = await parseMarkdownFile(filePath);
+      } catch {
+        return undefined;
+      }
+      
+      if (!parseResult.frontmatter || !parseResult.content) {
+        return undefined;
+      }
+
+      const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
+      if (!validateParsedEntry(frontmatter, parseResult.content)) {
+        return undefined;
+      }
+
+      return frontmatter as unknown as KnowledgeEntry;
+    } catch {
       return undefined;
     }
   }
 
   /**
-   * Search knowledge entries (basic implementation)
+   * Search entries (currently supports issues only)
    */
   async searchEntries(query: KnowledgeQuery): Promise<KnowledgeEntry[]> {
-    const entries: KnowledgeEntry[] = [];
-    
-    // Load all entries from all status folders
-    for (const status of Object.values(EntryStatus)) {
-      const statusFolder = STATUS_FOLDERS[status];
-      const folderPath = join(KNOWLEDGE_ROOT, statusFolder);
+    try {
+      await this.ensureInitialized();
+
+      const entries: KnowledgeEntry[] = [];
       
-      try {
-        for await (const entry of Deno.readDir(folderPath)) {
-          if (entry.isFile && entry.name.endsWith('.md')) {
-            try {
-              const filePath = join(folderPath, entry.name);
-              const knowledgeEntry = await this.loadEntry(filePath);
-              entries.push(knowledgeEntry);
-            } catch (error) {
-              // Skip invalid entries
+      // Only search issue type
+      const statusFolders = query.type === KnowledgeType.ISSUE 
+        ? Object.values(EntryStatus).map(status => STATUS_FOLDERS[status])
+        : [];
+
+      for (const statusFolder of statusFolders) {
+        const folderPath = join(KNOWLEDGE_ROOT, statusFolder);
+        
+        try {
+          for await (const dirEntry of Deno.readDir(folderPath)) {
+            if (!dirEntry.isFile || !dirEntry.name.endsWith('.md')) {
               continue;
             }
+
+            const filePath = join(folderPath, dirEntry.name);
+            let parseResult: ParsedMarkdownFile;
+            try {
+              parseResult = await parseMarkdownFile(filePath);
+            } catch {
+              continue;
+            }
+            
+            if (!parseResult.frontmatter || !parseResult.content) {
+              continue;
+            }
+
+            const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
+            if (!validateParsedEntry(frontmatter, parseResult.content)) {
+              continue;
+            }
+
+            const entry = frontmatter as unknown as KnowledgeEntry;
+            
+            // Apply filters
+            if (query.tags && query.tags.length > 0) {
+              const hasAllTags = query.tags.every(tag => entry.tags.includes(tag));
+              if (!hasAllTags) continue;
+            }
+
+            if (query.processId && entry.processId !== query.processId) {
+              continue;
+            }
+
+            if (query.search && !entry.content.toLowerCase().includes(query.search.toLowerCase())) {
+              continue;
+            }
+
+            entries.push(entry);
           }
+        } catch {
+          // Folder might not exist, continue
         }
-      } catch (error) {
-        // Folder might not exist, skip
-        continue;
       }
-    }
 
-    // Apply filters
-    let filtered = entries;
-
-    if (query.type) {
-      filtered = filtered.filter(entry => entry.type === query.type);
-    }
-
-    if (query.tags && query.tags.length > 0) {
-      filtered = filtered.filter(entry => 
-        query.tags!.some(tag => entry.tags.includes(tag))
-      );
-    }
-
-    if (query.processId) {
-      filtered = filtered.filter(entry => entry.processId === query.processId);
-    }
-
-    if (query.search) {
-      const searchLower = query.search.toLowerCase();
-      filtered = filtered.filter(entry => 
-        entry.content.toLowerCase().includes(searchLower)
-      );
-    }
-
-    if (query.answered !== undefined) {
-      filtered = filtered.filter(entry => 
-        isQuestion(entry) && entry.answered === query.answered
-      );
-    }
-
-    if (query.category) {
-      filtered = filtered.filter(entry => 
-        isNote(entry) && entry.category === query.category
-      );
-    }
-
-    // Apply sorting
-    if (query.sortBy) {
-      const sortOrder = query.sortOrder || 'desc';
-      filtered.sort((a, b) => {
-        let aVal: any, bVal: any;
+      // Sort entries
+      entries.sort((a, b) => {
+        const sortBy = query.sortBy || 'timestamp';
+        const order = query.sortOrder || 'desc';
         
-        switch (query.sortBy) {
-          case 'timestamp':
-            aVal = a.timestamp;
-            bVal = b.timestamp;
-            break;
-          case 'lastUpdated':
-            aVal = a.lastUpdated;
-            bVal = b.lastUpdated;
-            break;
-          case 'type':
-            aVal = a.type;
-            bVal = b.type;
-            break;
-          default:
-            return 0;
+        let comparison = 0;
+        if (sortBy === 'timestamp') {
+          comparison = a.timestamp.getTime() - b.timestamp.getTime();
+        } else if (sortBy === 'lastUpdated') {
+          comparison = a.lastUpdated.getTime() - b.lastUpdated.getTime();
+        } else if (sortBy === 'type') {
+          comparison = a.type.localeCompare(b.type);
         }
-
-        if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
-        return 0;
+        
+        return order === 'asc' ? comparison : -comparison;
       });
+
+      // Apply pagination
+      const start = query.offset || 0;
+      const end = query.limit ? start + query.limit : undefined;
+      
+      return entries.slice(start, end);
+    } catch {
+      return [];
     }
-
-    // Apply pagination
-    const offset = query.offset || 0;
-    const limit = query.limit;
-    
-    if (limit) {
-      return filtered.slice(offset, offset + limit);
-    }
-    
-    return filtered.slice(offset);
   }
 
   /**
-   * Get all entries
-   */
-  async getAllEntries(): Promise<KnowledgeEntry[]> {
-    return await this.searchEntries({});
-  }
-
-  /**
-   * Get answers for a question
-   */
-  async getAnswersForQuestion(questionId: string): Promise<Answer[]> {
-    const entries = await this.searchEntries({ type: KnowledgeType.ANSWER });
-    return entries.filter(entry => 
-      isAnswer(entry) && entry.questionId === questionId
-    ) as Answer[];
-  }
-
-  /**
-   * Get basic statistics (simplified implementation)
+   * Get knowledge statistics (issues only)
    */
   async getStatistics(): Promise<KnowledgeStats> {
-    const entries = await this.getAllEntries();
-    
-    const stats: KnowledgeStats = {
-      totalEntries: entries.length,
-      byType: {
-        questions: 0,
-        answers: 0,
-        notes: 0,
-        issues: 0,
-        milestones: 0
-      },
-      byStatus: {
-        answeredQuestions: 0,
-        unansweredQuestions: 0,
-        acceptedAnswers: 0
-      },
-      tagFrequency: {},
-      processCorrelation: {},
-      timeGrouping: {
-        today: 0,
-        thisWeek: 0,
-        thisMonth: 0,
-        older: 0
-      }
-    };
+    try {
+      await this.ensureInitialized();
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const thisWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thisMonth = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const stats: KnowledgeStats = {
+        totalEntries: 0,
+        byType: {
+          issues: 0,
+          milestones: 0
+        },
+        tagFrequency: {},
+        processCorrelation: {},
+        timeGrouping: {
+          today: 0,
+          thisWeek: 0,
+          thisMonth: 0,
+          older: 0
+        }
+      };
 
-    for (const entry of entries) {
-      // Count by type
-      switch (entry.type) {
-        case KnowledgeType.QUESTION:
-          stats.byType.questions++;
-          if (isQuestion(entry)) {
-            if (entry.answered) {
-              stats.byStatus.answeredQuestions++;
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      // Scan all status folders for issues
+      for (const statusFolder of Object.values(STATUS_FOLDERS)) {
+        const folderPath = join(KNOWLEDGE_ROOT, statusFolder);
+        
+        try {
+          for await (const dirEntry of Deno.readDir(folderPath)) {
+            if (!dirEntry.isFile || !dirEntry.name.endsWith('.md')) {
+              continue;
+            }
+
+            const filePath = join(folderPath, dirEntry.name);
+            let parseResult: ParsedMarkdownFile;
+            try {
+              parseResult = await parseMarkdownFile(filePath);
+            } catch {
+              continue;
+            }
+            
+            if (!parseResult.frontmatter || !parseResult.content) {
+              continue;
+            }
+
+            const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
+            if (!validateParsedEntry(frontmatter, parseResult.content)) {
+              continue;
+            }
+
+            const entry = frontmatter as unknown as KnowledgeEntry;
+            
+            // Count by type
+            stats.totalEntries++;
+            if (entry.type === KnowledgeType.ISSUE) {
+              stats.byType.issues++;
+            } else if (entry.type === KnowledgeType.MILESTONE) {
+              stats.byType.milestones++;
+            }
+
+            // Tag frequency
+            for (const tag of entry.tags) {
+              stats.tagFrequency[tag] = (stats.tagFrequency[tag] || 0) + 1;
+            }
+
+            // Process correlation
+            if (entry.processId) {
+              stats.processCorrelation[entry.processId] = (stats.processCorrelation[entry.processId] || 0) + 1;
+            }
+
+            // Time grouping
+            const entryTime = entry.timestamp.getTime();
+            if (entryTime >= today.getTime()) {
+              stats.timeGrouping.today++;
+            } else if (entryTime >= weekAgo.getTime()) {
+              stats.timeGrouping.thisWeek++;
+            } else if (entryTime >= monthAgo.getTime()) {
+              stats.timeGrouping.thisMonth++;
             } else {
-              stats.byStatus.unansweredQuestions++;
+              stats.timeGrouping.older++;
             }
           }
-          break;
-        case KnowledgeType.ANSWER:
-          stats.byType.answers++;
-          if (isAnswer(entry) && entry.accepted) {
-            stats.byStatus.acceptedAnswers++;
-          }
-          break;
-        case KnowledgeType.NOTE:
-          stats.byType.notes++;
-          break;
-        case KnowledgeType.ISSUE:
-          stats.byType.issues++;
-          break;
-      }
-
-      // Count tags
-      for (const tag of entry.tags) {
-        stats.tagFrequency[tag] = (stats.tagFrequency[tag] || 0) + 1;
-      }
-
-      // Count processes
-      if (entry.processId) {
-        stats.processCorrelation[entry.processId] = 
-          (stats.processCorrelation[entry.processId] || 0) + 1;
-      }
-
-      // Time grouping
-      if (entry.timestamp >= today) {
-        stats.timeGrouping.today++;
-      } else if (entry.timestamp >= thisWeek) {
-        stats.timeGrouping.thisWeek++;
-      } else if (entry.timestamp >= thisMonth) {
-        stats.timeGrouping.thisMonth++;
-      } else {
-        stats.timeGrouping.older++;
-      }
-    }
-
-    return stats;
-  }
-
-  /**
-   * Accept an answer for a question
-   */
-  async acceptAnswer(answerId: string): Promise<KnowledgeResult<Answer>> {
-    try {
-      const answerPath = await this.findEntryPath(answerId);
-      if (!answerPath) {
-        return { 
-          success: false, 
-          error: `Answer with ID ${answerId} not found` 
-        };
-      }
-
-      const answer = await this.loadEntry(answerPath);
-      if (!isAnswer(answer)) {
-        return { 
-          success: false, 
-          error: `Entry ${answerId} is not an answer` 
-        };
-      }
-
-      // Unaccept any previously accepted answers for this question
-      const allAnswers = await this.getAnswersForQuestion(answer.questionId);
-      for (const otherAnswer of allAnswers) {
-        if (otherAnswer.accepted && otherAnswer.id !== answerId) {
-          await this.updateEntry(otherAnswer.id, { accepted: false });
+        } catch {
+          // Folder might not exist, continue
         }
       }
 
-      // Accept this answer
-      const result = await this.updateEntry(answerId, { accepted: true });
-      if (result.success && result.data && isAnswer(result.data)) {
-        return { success: true, data: result.data };
-      }
-      return result as KnowledgeResult<Answer>;
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return stats;
+    } catch {
+      return {
+        totalEntries: 0,
+        byType: { issues: 0, milestones: 0 },
+        tagFrequency: {},
+        processCorrelation: {},
+        timeGrouping: { today: 0, thisWeek: 0, thisMonth: 0, older: 0 }
       };
     }
-  }
-
-  /**
-   * Get suggested tags based on existing entries (simplified)
-   */
-  async getSuggestedTags(partialTag?: string): Promise<string[]> {
-    const stats = await this.getStatistics();
-    let tags = Object.keys(stats.tagFrequency);
-
-    // Filter by partial match if provided
-    if (partialTag) {
-      const partial = partialTag.toLowerCase();
-      tags = tags.filter(tag => tag.toLowerCase().includes(partial));
-    }
-
-    // Sort by frequency (most used first)
-    return tags.sort((a, b) => 
-      (stats.tagFrequency[b] || 0) - (stats.tagFrequency[a] || 0)
-    );
-  }
-
-  /**
-   * Clear all knowledge entries
-   */
-  async clear(): Promise<void> {
-    await this.ensureInitialized();
-    
-    // Remove all files from all status folders
-    for (const status of Object.values(EntryStatus)) {
-      const statusFolder = STATUS_FOLDERS[status];
-      const folderPath = join(KNOWLEDGE_ROOT, statusFolder);
-      
-      try {
-        for await (const entry of Deno.readDir(folderPath)) {
-          if (entry.isFile && entry.name.endsWith('.md')) {
-            const filePath = join(folderPath, entry.name);
-            await Deno.remove(filePath);
-          }
-        }
-      } catch (error) {
-        // Folder might not exist, ignore
-      }
-    }
-  }
-
-  /**
-   * Load method (no-op for file-based implementation)
-   */
-  async load(): Promise<void> {
-    // File-based implementation doesn't need explicit loading
-    await this.ensureInitialized();
-  }
-
-  /**
-   * Save method (no-op for file-based implementation)
-   */
-  async save(): Promise<void> {
-    // File-based implementation saves immediately
-  }
-
-  /**
-   * Set auto-save (no-op for file-based implementation)
-   */
-  setAutoSave(enabled: boolean): void {
-    // File-based implementation always auto-saves
-  }
-
-  /**
-   * Export to file (simplified - just copy files)
-   */
-  async exportToFile(filePath: string, query?: KnowledgeQuery): Promise<void> {
-    const entries = query ? await this.searchEntries(query) : await this.getAllEntries();
-    
-    // Create a simple JSON export
-    const exportData = {
-      version: '1.0',
-      timestamp: new Date().toISOString(),
-      entries: entries
-    };
-    
-    await Deno.writeTextFile(filePath, JSON.stringify(exportData, null, 2));
-  }
-
-  /**
-   * Import from file (simplified)
-   */
-  async importFromFile(filePath: string): Promise<number> {
-    const content = await Deno.readTextFile(filePath);
-    const data = JSON.parse(content);
-    
-    if (!data.entries || !Array.isArray(data.entries)) {
-      throw new Error('Invalid import format');
-    }
-    
-    let imported = 0;
-    for (const entry of data.entries) {
-      try {
-        // Check if entry already exists
-        const existing = await this.getEntry(entry.id);
-        if (!existing) {
-          // Convert timestamp strings back to Date objects
-          entry.timestamp = new Date(entry.timestamp);
-          entry.lastUpdated = new Date(entry.lastUpdated);
-          if (entry.dueDate) {
-            entry.dueDate = new Date(entry.dueDate);
-          }
-          
-          await this.saveEntry(entry);
-          imported++;
-        }
-      } catch (error) {
-        // Failed to import entry, skip
-      }
-    }
-    
-    return imported;
   }
 
   /**

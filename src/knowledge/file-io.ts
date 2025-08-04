@@ -14,9 +14,6 @@ import {
   KNOWLEDGE_ROOT,
   STATUS_FOLDERS,
   TYPE_PREFIXES,
-  Question,
-  Answer,
-  Note,
   Issue,
   Milestone
 } from './types.ts';
@@ -114,29 +111,7 @@ export function serializeToMarkdown(entry: KnowledgeEntry): string {
   };
   
   // Add type-specific fields
-  if (entry.type === KnowledgeType.QUESTION) {
-    const question = entry as Question;
-    (frontmatter as any).answered = question.answered;
-    (frontmatter as any).answerIds = [...(question.answerIds || [])];
-    if (question.priority) {
-      (frontmatter as any).priority = question.priority;
-    }
-  } else if (entry.type === KnowledgeType.ANSWER) {
-    const answer = entry as Answer;
-    (frontmatter as any).questionId = answer.questionId;
-    (frontmatter as any).accepted = answer.accepted;
-    if (typeof answer.votes === 'number') {
-      (frontmatter as any).votes = answer.votes;
-    }
-  } else if (entry.type === KnowledgeType.NOTE) {
-    const note = entry as Note;
-    if (note.category) {
-      (frontmatter as any).category = note.category;
-    }
-    if (note.relatedIds && note.relatedIds.length > 0) {
-      (frontmatter as any).relatedIds = [...note.relatedIds];
-    }
-  } else if (entry.type === KnowledgeType.ISSUE) {
+  if (entry.type === KnowledgeType.ISSUE) {
     const issue = entry as Issue;
     (frontmatter as any).priority = issue.priority;
     if (issue.assignee) {
@@ -244,13 +219,7 @@ export function parseCrossReferences(content: string): CrossReference[] {
     
     // Determine type from ID prefix
     let type: KnowledgeType;
-    if (id.startsWith('QUESTION_')) {
-      type = KnowledgeType.QUESTION;
-    } else if (id.startsWith('ANSWER_')) {
-      type = KnowledgeType.ANSWER;
-    } else if (id.startsWith('NOTE_')) {
-      type = KnowledgeType.NOTE;
-    } else if (id.startsWith('ISSUE_')) {
+    if (id.startsWith('ISSUE_')) {
       type = KnowledgeType.ISSUE;
     } else if (id.startsWith('MILESTONE_')) {
       type = KnowledgeType.MILESTONE;

@@ -71,16 +71,19 @@ interface ProcessEntry {
 }
 ```
 
-### Knowledge Management
+### Knowledge Management (Fragments)
 
 **MCP Tools:**
-- `record_question` - Record questions for later answering
-- `record_answer` - Answer previously asked questions
-- `list_questions_and_answers` - Browse knowledge base
-- `record_note` - Create standalone notes
-- `list_notes` - Retrieve categorized notes
+- `record_fragment` - Store knowledge with automatic embeddings
+- `list_fragments` - List fragments with metadata filtering
+- `search_fragments_by_title` - Exact title search
+- `search_fragments_similar` - Vector similarity search
+- `get_fragment` - Retrieve by ID
+- `update_fragment` - Modify fragments
+- `delete_fragment` - Remove fragments
+- `get_fragment_stats` - System statistics
 
-**Storage:** Persisted to `knowledge-state.json`
+**Storage:** LanceDB vector database in `.knowledge/lance_fragments`
 
 ### Issue Tracking
 

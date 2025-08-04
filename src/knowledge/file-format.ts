@@ -15,9 +15,6 @@ export const CROSS_REFERENCE_PATTERN = /\[\[([A-Z]+_\d+)\]\]/g;
 /**
  * Type prefixes for entry IDs
  */
-export const QUESTION_ = TYPE_PREFIXES[KnowledgeType.QUESTION];
-export const ANSWER_ = TYPE_PREFIXES[KnowledgeType.ANSWER];
-export const NOTE_ = TYPE_PREFIXES[KnowledgeType.NOTE];
 export const ISSUE_ = TYPE_PREFIXES[KnowledgeType.ISSUE];
 export const MILESTONE_ = TYPE_PREFIXES[KnowledgeType.MILESTONE];
 
@@ -43,8 +40,8 @@ export const MILESTONE_ = TYPE_PREFIXES[KnowledgeType.MILESTONE];
  *   - frontend
  * processId: proc_abc123
  * relatedIds:
- *   - NOTE_456
- *   - QUESTION_789
+ *   - ISSUE_456
+ *   - MILESTONE_789
  * metadata:
  *   reporter: user123
  *   severity: critical
@@ -131,99 +128,6 @@ export const FRONTMATTER_DELIMITER = '---';
  * Example markdown templates for each knowledge type
  */
 export const MARKDOWN_TEMPLATES = {
-  [KnowledgeType.QUESTION]: `---
-id: QUESTION_1
-type: question
-status: open
-answered: false
-priority: medium
-timestamp: 2024-01-01T12:00:00.000Z
-lastUpdated: 2024-01-01T12:00:00.000Z
-tags:
-  - help
-  - configuration
-answerIds: []
-metadata: {}
----
-
-# How do I configure the process timeout?
-
-I'm trying to set a custom timeout for long-running processes but can't
-find the configuration option. Where should this be set?
-
-## Context
-
-I'm running batch processing jobs that take more than the default timeout.
-`,
-
-  [KnowledgeType.ANSWER]: `---
-id: ANSWER_1
-type: answer
-status: open
-questionId: QUESTION_1
-accepted: false
-timestamp: 2024-01-01T13:00:00.000Z
-lastUpdated: 2024-01-01T13:00:00.000Z
-tags:
-  - configuration
-  - timeout
-votes: 0
-metadata: {}
----
-
-# Process Timeout Configuration
-
-You can set the process timeout in the configuration file or via environment
-variables:
-
-## Configuration File
-
-\`\`\`json
-{
-  "processTimeout": 300000
-}
-\`\`\`
-
-## Environment Variable
-
-\`\`\`bash
-export PROCESS_TIMEOUT=300000
-\`\`\`
-
-See [[NOTE_123]] for more configuration options.
-`,
-
-  [KnowledgeType.NOTE]: `---
-id: NOTE_1
-type: note
-status: open
-category: observation
-timestamp: 2024-01-01T14:00:00.000Z
-lastUpdated: 2024-01-01T14:00:00.000Z
-tags:
-  - performance
-  - monitoring
-relatedIds:
-  - QUESTION_456
-metadata:
-  severity: info
----
-
-# Process Memory Usage Patterns
-
-Observed that processes with large datasets tend to show memory growth
-patterns during the initial loading phase, then stabilize.
-
-## Key Observations
-
-- Memory usage peaks at ~2x final size during loading
-- Garbage collection occurs regularly after stabilization
-- No memory leaks detected in 24-hour monitoring
-
-## Related
-
-This observation helps answer [[QUESTION_456]] about memory requirements.
-`,
 
   [KnowledgeType.ISSUE]: `---
 id: ISSUE_1
