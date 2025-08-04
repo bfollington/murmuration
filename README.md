@@ -1,6 +1,8 @@
 # Murmuration 🐦‍⬛🕊️
 
-A comprehensive toolset for harmonious coordination between AI subagents, built on the Model Context Protocol (MCP). Murmuration provides process management, persistent knowledge storage, issue tracking, and intelligent queuing to enable multiple AI agents to work together effectively on complex tasks.
+<img width="1800" height="1200" alt="image" src="https://github.com/user-attachments/assets/146024ee-6251-4afa-a6ee-a770dbbdc01c" />
+
+A toolset for harmonious coordination between AI subagents, built on the Model Context Protocol (MCP). Murmuration provides process management, persistent knowledge storage, issue tracking, and intelligent queuing to enable multiple AI agents to work together effectively on complex tasks.
 
 ## Overview
 
