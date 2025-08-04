@@ -41,14 +41,22 @@ export interface ProcessEntry {
  * Extended response format for MCP tool responses that includes web UI URLs
  */
 export interface MCPResponseContent {
+  [x: string]: unknown;
   type: 'text';
   text: string;
+  _meta?: {
+    [x: string]: unknown;
+  } | undefined;
 }
 
 /**
  * MCP tool response with optional web UI URL
  */
 export interface MCPToolResponse {
+  [x: string]: unknown;
   content: MCPResponseContent[];
   webUrl?: string;
+  _meta?: {
+    [x: string]: unknown;
+  } | undefined;
 }

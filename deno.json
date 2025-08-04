@@ -3,16 +3,17 @@
   "version": "0.1.0",
   "tasks": {
     "dev": "deno run --allow-run --allow-net --allow-read --allow-write --allow-env src/main.ts",
-    "build": "deno compile --allow-run --allow-net --allow-read --allow-write --allow-env --output ./build/mcp-process-server src/main.ts",
+    "build": "deno compile --allow-ffi --allow-run --allow-net --allow-read --allow-write --allow-env --output ./build/mcp-process-server src/main.ts",
     "web": "deno run --allow-all src/web/main.ts",
     "web-dev": "deno run --allow-all --watch src/web/main.ts"
   },
   "imports": {
     "@std/": "https://deno.land/std@0.208.0/",
     "@std/uuid": "jsr:@std/uuid",
-    "@std/async": "jsr:@std/async", 
+    "@std/async": "jsr:@std/async",
     "@std/streams": "jsr:@std/streams",
-    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@latest"
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@latest",
+    "@lancedb/lancedb": "npm:@lancedb/lancedb@^0.5.0"
   },
   "compilerOptions": {
     "strict": true,
