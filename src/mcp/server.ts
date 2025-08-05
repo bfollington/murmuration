@@ -1972,8 +1972,8 @@ export class MCPProcessServer {
           throw new McpError(ErrorCode.InvalidRequest, `Issue with ID ${params.issue_id} not found`);
         }
         
-        const currentTitle = currentIssue.metadata?.title || currentIssue.content.split('\n')[0].replace(/^# /, '') || 'Untitled Issue';
-        const currentContent = currentIssue.metadata?.title ? currentIssue.content.replace(/^# .*\n\n/, '') : currentIssue.content;
+        const currentTitle = currentIssue.metadata?.title || (currentIssue.content ? currentIssue.content.split('\n')[0].replace(/^# /, '') : '') || 'Untitled Issue';
+        const currentContent = currentIssue.metadata?.title && currentIssue.content ? currentIssue.content.replace(/^# .*\n\n/, '') : (currentIssue.content || '');
         
         const newTitle = params.title !== undefined ? params.title as string : currentTitle;
         const newContent = params.content !== undefined ? params.content as string : currentContent;

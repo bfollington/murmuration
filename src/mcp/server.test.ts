@@ -4,7 +4,8 @@ import { ProcessManager } from '../process/manager.ts';
 import { ProcessRegistry } from '../process/registry.ts';
 import { ProcessStatus } from '../shared/types.ts';
 import { ProcessMonitoringConfig } from '../process/types.ts';
-import { KnowledgeManager } from '../knowledge/manager.ts';
+import { FileKnowledgeManager } from '../knowledge/file-manager.ts';
+import { EntryStatus } from '../knowledge/types.ts';
 import { IntegratedQueueManager } from '../queue/integrated-manager.ts';
 import { MilestoneManager } from '../knowledge/milestone-manager.ts';
 
@@ -30,12 +31,12 @@ function createTestProcessManager(): ProcessManager {
  */
 function createTestManagers(): {
   processManager: ProcessManager;
-  knowledgeManager: KnowledgeManager;
+  knowledgeManager: FileKnowledgeManager;
   queueManager: IntegratedQueueManager;
   milestoneManager: MilestoneManager;
 } {
   const processManager = createTestProcessManager();
-  const knowledgeManager = new KnowledgeManager();
+  const knowledgeManager = new FileKnowledgeManager();
   const queueManager = new IntegratedQueueManager(processManager, {
     maxConcurrentProcesses: 2,
     autoStart: false, // Don't auto-start in tests
@@ -1589,7 +1590,7 @@ Deno.test('MCPProcessServer - Knowledge Management Integration', async () => {
   assertEquals(entries[0].content, 'How do I fix build errors?');
   
   // Cleanup
-  knowledgeManager.clear();
+  // knowledgeManager cleanup handled by test framework
 });
 
 /**
@@ -1663,5 +1664,110 @@ Deno.test('MCPProcessServer - Full Integration Test', async () => {
   
   // Cleanup
   await queueManager.shutdown();
-  knowledgeManager.clear();
+  // knowledgeManager cleanup handled by test framework
+});
+
+/**
+ * Regression tests for issue tracking content handling
+ */
+Deno.test('MCPProcessServer - handleUpdateIssue with missing content', async () => {
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
+  
+  // Create an issue first
+  const createResult = await knowledgeManager.createIssue({
+    content: '# Test Issue\n\nThis is test content',
+    priority: 'medium',
+    tags: ['test']
+  });
+  
+  assert(createResult.success);
+  const issueId = createResult.data!.id;
+  
+  // Test updating title when issue has content
+  const updateTitleResult = await server.callTool({
+    name: 'update_issue',
+    arguments: {
+      issue_id: issueId,
+      title: 'Updated Title'
+    }
+  });
+  
+  // Should succeed without throwing split error
+  assertExists(updateTitleResult);
+  assert(updateTitleResult.content[0].text.includes('updated successfully'));
+  
+  // Verify content is preserved
+  const updatedIssue = await knowledgeManager.getEntry(issueId);
+  assertExists(updatedIssue);
+  assert(updatedIssue.content.includes('This is test content'));
+  assert(updatedIssue.content.includes('Updated Title'));
+});
+
+Deno.test('MCPProcessServer - handleUpdateIssue with undefined content field', async () => {
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
+  
+  // Create an issue
+  const createResult = await knowledgeManager.createIssue({
+    content: 'Minimal content',
+    priority: 'low',
+    tags: []
+  });
+  
+  assert(createResult.success);
+  const issueId = createResult.data!.id;
+  
+  // Update only status - should not throw error even if content handling has issues
+  const updateStatusResult = await server.callTool({
+    name: 'update_issue',
+    arguments: {
+      issue_id: issueId,
+      status: 'completed'
+    }
+  });
+  
+  assertExists(updateStatusResult);
+  assert(updateStatusResult.content[0].text.includes('updated successfully'));
+  
+  // Verify the update worked
+  const updatedIssue = await knowledgeManager.getEntry(issueId);
+  assertExists(updatedIssue);
+  assertEquals(updatedIssue.status, EntryStatus.COMPLETED);
+  assertEquals(updatedIssue.content, 'Minimal content');
+});
+
+Deno.test('MCPProcessServer - handleUpdateIssue preserves metadata', async () => {
+  const { processManager, knowledgeManager, queueManager, milestoneManager } = createTestManagers();
+  const server = new MCPProcessServer(processManager, knowledgeManager, queueManager, milestoneManager);
+  
+  // Create an issue with title in metadata
+  const createResult = await knowledgeManager.createIssue({
+    content: '# Original Title\n\nContent here',
+    priority: 'high',
+    tags: ['metadata-test'],
+    metadata: {
+      title: 'Original Title',
+      customField: 'test-value'
+    }
+  });
+  
+  assert(createResult.success);
+  const issueId = createResult.data!.id;
+  
+  // Update content only
+  const updateResult = await server.callTool({
+    name: 'update_issue',
+    arguments: {
+      issue_id: issueId,
+      content: 'New content without title header'
+    }
+  });
+  
+  assertExists(updateResult);
+  
+  // Verify metadata is preserved
+  const updatedIssue = await knowledgeManager.getEntry(issueId);
+  assertExists(updatedIssue);
+  assertEquals(updatedIssue.metadata.customField, 'test-value');
 });

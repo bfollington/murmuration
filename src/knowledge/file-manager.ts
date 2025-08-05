@@ -203,8 +203,11 @@ export class FileKnowledgeManager {
         };
       }
 
-      // Build updated entry
-      const current = frontmatter as unknown as Issue;
+      // Build updated entry - need to include content from parseResult
+      const current = {
+        ...frontmatter,
+        content: parseResult.content
+      } as unknown as Issue;
       const updated: Issue = {
         ...current,
         content: updates.content !== undefined ? updates.content : current.content,
@@ -281,7 +284,10 @@ export class FileKnowledgeManager {
         if (parseResult.frontmatter && parseResult.content) {
           const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
           if (validateParsedEntry(frontmatter, parseResult.content)) {
-            entry = frontmatter as unknown as Issue;
+            entry = {
+              ...frontmatter,
+              content: parseResult.content
+            } as unknown as Issue;
           }
         }
       } catch {
@@ -324,16 +330,43 @@ export class FileKnowledgeManager {
         return undefined;
       }
       
-      if (!parseResult.frontmatter || !parseResult.content) {
+      if (!parseResult.frontmatter) {
         return undefined;
       }
 
       const frontmatter = convertFrontmatterDates(parseResult.frontmatter);
-      if (!validateParsedEntry(frontmatter, parseResult.content)) {
+      if (!validateParsedEntry(frontmatter, parseResult.content || '')) {
         return undefined;
       }
 
-      return frontmatter as unknown as KnowledgeEntry;
+      // Construct the full entry with content
+      const entry: KnowledgeEntry = {
+        id: frontmatter.id as string,
+        type: frontmatter.type as KnowledgeType,
+        content: parseResult.content || '',
+        timestamp: frontmatter.timestamp as Date,
+        lastUpdated: frontmatter.lastUpdated as Date,
+        tags: (frontmatter.tags as string[]) || [],
+        status: frontmatter.status as EntryStatus,
+        processId: frontmatter.processId as string | undefined,
+        metadata: (frontmatter.metadata as Record<string, unknown>) || {}
+      };
+
+      // Add type-specific fields
+      if (frontmatter.type === KnowledgeType.ISSUE) {
+        (entry as Issue).priority = frontmatter.priority as 'low' | 'medium' | 'high';
+        if (frontmatter.assignee) {
+          (entry as Issue).assignee = frontmatter.assignee as string;
+        }
+        if (frontmatter.dueDate) {
+          (entry as Issue).dueDate = frontmatter.dueDate as Date;
+        }
+        if (frontmatter.relatedIds) {
+          (entry as Issue).relatedIds = frontmatter.relatedIds as string[];
+        }
+      }
+
+      return entry;
     } catch {
       return undefined;
     }
@@ -379,7 +412,10 @@ export class FileKnowledgeManager {
               continue;
             }
 
-            const entry = frontmatter as unknown as KnowledgeEntry;
+            const entry = {
+              ...frontmatter,
+              content: parseResult.content
+            } as unknown as KnowledgeEntry;
             
             // Apply filters
             if (query.tags && query.tags.length > 0) {
@@ -484,7 +520,10 @@ export class FileKnowledgeManager {
               continue;
             }
 
-            const entry = frontmatter as unknown as KnowledgeEntry;
+            const entry = {
+              ...frontmatter,
+              content: parseResult.content
+            } as unknown as KnowledgeEntry;
             
             // Count by type
             stats.totalEntries++;
