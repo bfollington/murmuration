@@ -18,11 +18,16 @@ export * from './fragment-store.ts';
 // High-level operations and tools
 export * from './fragment-tools.ts';
 
+// Link types and storage
+export * from './link-types.ts';
+export * from './link-store.ts';
+
 // Migration from legacy knowledge system
 export * from './migrate.ts';
 
 // MCP tool handlers
 export * from '../../../mcp/tools/fragment.ts';
+export * from '../../../mcp/tools/fragment-links.ts';
 
 /**
  * Quick setup function for the fragment system

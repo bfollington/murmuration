@@ -31,6 +31,7 @@ import {
 } from '../shared/url-utils.ts';
 import { MCPToolResponse, MCPResponseContent } from '../shared/types.ts';
 import { fragmentToolDefinitions, fragmentToolHandlers } from './tools/fragment.ts';
+import { fragmentLinkToolDefinitions, fragmentLinkToolHandlers } from './tools/fragment-links.ts';
 
 /**
  * MCPProcessServer - Model Context Protocol server for process management
@@ -280,6 +281,8 @@ export class MCPProcessServer {
         tools: [
           // Fragment tools (replacing old knowledge tools)
           ...fragmentToolDefinitions,
+          // Fragment link tools
+          ...fragmentLinkToolDefinitions,
           {
             name: 'start_process',
             description: 'Start a new process either immediately or add it to the queue based on priority and system capacity',
@@ -728,6 +731,8 @@ export class MCPProcessServer {
             return await fragmentToolHandlers.handleSearchFragmentsByTitle(args);
           case 'search_fragments_similar':
             return await fragmentToolHandlers.handleSearchFragmentsSimilar(args);
+          case 'search_fragments_advanced':
+            return await fragmentToolHandlers.handleSearchFragmentsAdvanced(args);
           case 'get_fragment':
             return await fragmentToolHandlers.handleGetFragment(args);
           case 'update_fragment':
@@ -736,6 +741,17 @@ export class MCPProcessServer {
             return await fragmentToolHandlers.handleDeleteFragment(args);
           case 'get_fragment_stats':
             return await fragmentToolHandlers.handleGetFragmentStats(args);
+          // Fragment link tools
+          case 'create_fragment_link':
+            return await fragmentLinkToolHandlers.handleCreateFragmentLink(args);
+          case 'delete_fragment_link':
+            return await fragmentLinkToolHandlers.handleDeleteFragmentLink(args);
+          case 'get_fragment_links':
+            return await fragmentLinkToolHandlers.handleGetFragmentLinks(args);
+          case 'traverse_fragment_links':
+            return await fragmentLinkToolHandlers.handleTraverseFragmentLinks(args);
+          case 'get_fragment_with_links':
+            return await fragmentLinkToolHandlers.handleGetFragmentWithLinks(args);
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,

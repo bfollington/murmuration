@@ -16,7 +16,10 @@ import {
   FragmentSimilarityResults,
   FragmentType,
   FragmentPriority,
-  FragmentStatus
+  FragmentStatus,
+  TimeFilter,
+  AdvancedFragmentQuery,
+  AdvancedFragmentResults
 } from './fragment-types.ts';
 import { FragmentStore, getFragmentStore } from './fragment-store.ts';
 
@@ -108,6 +111,7 @@ export class FragmentTools {
     status?: string;
     priority?: string;
     search?: string;
+    timeFilter?: TimeFilter;
     limit?: number;
     offset?: number;
   } = {}): Promise<FragmentToolResult> {
@@ -118,6 +122,7 @@ export class FragmentTools {
         status: params.status as FragmentStatus,
         priority: params.priority as FragmentPriority,
         search: params.search,
+        timeFilter: params.timeFilter,
         limit: params.limit,
         offset: params.offset
       };
@@ -180,6 +185,7 @@ export class FragmentTools {
     type?: string;
     tags?: string[];
     status?: string;
+    timeFilter?: TimeFilter;
   }): Promise<FragmentToolResult> {
     try {
       if (!params.query?.trim()) {
@@ -195,7 +201,8 @@ export class FragmentTools {
         threshold: params.threshold,
         type: params.type as FragmentType,
         tags: params.tags,
-        status: params.status as FragmentStatus
+        status: params.status as FragmentStatus,
+        timeFilter: params.timeFilter
       };
       
       const results = await this.store.searchFragmentsSimilar(query);
@@ -410,6 +417,64 @@ export class FragmentTools {
       
     } catch (error) {
       logger.error('FragmentTools', `initialize error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+  
+  /**
+   * Advanced fragment search combining multiple search methods
+   */
+  async searchFragmentsAdvanced(params: {
+    similarTo?: string;
+    similarityThreshold?: number;
+    textSearch?: string;
+    searchFields?: ('title' | 'body')[];
+    useRegex?: boolean;
+    timeFilter?: TimeFilter;
+    type?: string;
+    status?: string;
+    priority?: string;
+    tags?: string[];
+    filterMode?: 'pre' | 'post';
+    limit?: number;
+    offset?: number;
+    sortBy?: 'relevance' | 'created' | 'updated' | 'title';
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<FragmentToolResult> {
+    try {
+      // Build the advanced query
+      const query: AdvancedFragmentQuery = {
+        similarTo: params.similarTo?.trim(),
+        similarityThreshold: params.similarityThreshold,
+        textSearch: params.textSearch?.trim(),
+        searchFields: params.searchFields,
+        useRegex: params.useRegex,
+        timeFilter: params.timeFilter,
+        type: params.type as FragmentType,
+        status: params.status as FragmentStatus,
+        priority: params.priority as FragmentPriority,
+        tags: params.tags,
+        filterMode: params.filterMode,
+        limit: params.limit,
+        offset: params.offset,
+        sortBy: params.sortBy,
+        sortOrder: params.sortOrder
+      };
+      
+      // Perform the advanced search
+      const results = await this.store.searchFragmentsAdvanced(query);
+      
+      return {
+        success: true,
+        data: results,
+        message: `Advanced search found ${results.fragments.length} fragments ${results.queryTime ? `in ${results.queryTime}ms` : ''}`
+      };
+      
+    } catch (error) {
+      logger.error('FragmentTools', `searchFragmentsAdvanced error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
