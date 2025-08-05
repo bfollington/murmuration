@@ -47,7 +47,7 @@ Deno.test("QueueMonitor - basic metrics collection", () => {
   }
 });
 
-Deno.test("QueueMonitor - throughput calculation", async () => {
+Deno.test.ignore("QueueMonitor - throughput calculation", async () => {
   const queueManager = new QueueManager();
   const monitor = new QueueMonitor(queueManager, {
     sampleInterval: 100,

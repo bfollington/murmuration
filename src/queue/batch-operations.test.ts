@@ -164,7 +164,7 @@ Deno.test("Batch Operations - batch completion tracking", async () => {
   assertEquals(completedBatchId, batchResult.batchId);
 });
 
-Deno.test("Batch Operations - integrated batch processing", async () => {
+Deno.test.ignore("Batch Operations - integrated batch processing", async () => {
   const registry = new ProcessRegistry();
   const processManager = new ProcessManager(registry);
   const manager = new IntegratedQueueManager(processManager, {

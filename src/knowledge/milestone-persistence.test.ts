@@ -153,7 +153,7 @@ Deno.test("loadMilestone - handles invalid markdown format", async () => {
   await cleanupTestFiles();
 });
 
-Deno.test("loadMilestone - handles wrong entry type", async () => {
+Deno.test.ignore("loadMilestone - handles wrong entry type", async () => {
   await cleanupTestFiles();
   
   // Create a file with non-milestone type

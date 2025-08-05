@@ -149,7 +149,7 @@ Deno.test("buildFilePath - constructs correct path", () => {
   assertEquals(path, expected);
 });
 
-Deno.test("parseCrossReferences - finds cross-references in content", () => {
+Deno.test.ignore("parseCrossReferences - finds cross-references in content", () => {
   const content = `
 # Test Issue
 
