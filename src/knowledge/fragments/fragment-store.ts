@@ -176,6 +176,22 @@ export class FragmentStore {
       return null;
     }
     
+    // Get the existing row to preserve the vector
+    const existingRowResults: unknown[] = [];
+    for await (const batch of this.table!
+      .query()
+      .where(`id = '${request.id}'`)
+      .limit(1)
+    ) {
+      existingRowResults.push(...batch);
+    }
+    
+    if (existingRowResults.length === 0) {
+      return null;
+    }
+    
+    const existingRow = existingRowResults[0] as FragmentRow;
+    
     // Create updated fragment
     const updated: Fragment = {
       ...existing,
@@ -198,9 +214,8 @@ export class FragmentStore {
     
     // Convert to row format
     const row = fragmentToRow(updated);
-    if (embedding) {
-      row.vector = embedding;
-    }
+    // Use new embedding if generated, otherwise preserve existing vector
+    row.vector = embedding || existingRow.vector;
     
     // Delete old record and insert new one (LanceDB doesn't have native update)
     await this.table!.delete(`id = '${request.id}'`);
